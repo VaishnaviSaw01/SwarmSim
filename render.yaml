@@ -1,0 +1,22 @@
+# Render blueprint for SwarmSim -- native Python runtime, no Docker build.
+#
+# Deploy via Render's "New +" -> "Blueprint" and point it at this repo, or
+# configure a Web Service manually with the same build/start commands and
+# env vars below (see README.md "Deployment" for the manual steps).
+services:
+  - type: web
+    name: swarmsim
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: RATE_LIMIT_MAX
+        value: "10"
+      - key: RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: LOG_LEVEL
+        value: "INFO"
