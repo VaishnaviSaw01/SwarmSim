@@ -1,3 +1,19 @@
+---
+title: SwarmSim
+emoji: 🐝
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
+_This branch (`huggingface-space`) is the Hugging Face Space deployment
+mirror of [SwarmSim](https://github.com/VaishnaviSaw01/SwarmSim) — same
+code, same Dockerfile, just with the YAML block above that Spaces needs
+for config. The `main` branch on GitHub is the canonical source; deploy
+from there / open PRs there, not here._
+
 # SwarmSim
 
 A lightweight multi-agent opinion simulation engine, built as an
