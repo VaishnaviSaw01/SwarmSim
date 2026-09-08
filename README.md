@@ -42,7 +42,8 @@ evaluate.py        variance per round, convergence round,
  report.py         matplotlib PNG chart + JSON report to disk
      |
      v
-  main.py          FastAPI POST /simulate ties it all together
+  main.py          FastAPI POST /simulate ties it all together,
+                    serves static/index.html as the demo UI
 ```
 
 Each module owns exactly one responsibility, and none of them know about
@@ -56,7 +57,9 @@ the layers two steps away:
 | `simulate.py` | wiring seed + environment across rounds | evaluation, reporting |
 | `evaluate.py` | metrics over a log | how the log was produced |
 | `report.py` | rendering a log/metrics to disk | how metrics were computed |
-| `main.py` | HTTP plumbing | none of the above internals |
+| `ratelimit.py` | per-client request counting | HTTP, FastAPI, what it's protecting |
+| `main.py` | HTTP plumbing, CORS, rate limiting, logging | none of the above internals |
+| `static/index.html` | a browser form for `/simulate` | the pipeline internals — talks to it only over HTTP |
 
 That separation is what makes each piece independently testable (see
 `tests/`) and independently explainable.
@@ -182,7 +185,9 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-The API is now at `http://127.0.0.1:8000`.
+Open `http://127.0.0.1:8000/` for the demo UI (a form: topic / agents /
+rounds -> summary + stats + chart, with a "view raw report JSON" toggle),
+or use the API directly — interactive docs at `http://127.0.0.1:8000/docs`.
 
 ### Example requests
 
@@ -219,8 +224,10 @@ curl -X POST http://127.0.0.1:8000/simulate \
 ```
 
 Each call returns a JSON report (topic, params, seed info, metrics,
-summary) plus `chart_path` / `report_path` pointing at the saved PNG and
-`report.json` under `output/<run_id>/`.
+summary) plus `chart_url` (fetch the PNG from `GET {chart_url}`) and
+`report_path` (where `report.json` landed under `output/<run_id>/` on the
+server). `num_agents` / `num_rounds` are capped at 200 each on this
+endpoint — see "Deployment" below for why.
 
 ### Running the tests
 
@@ -228,10 +235,58 @@ summary) plus `chart_path` / `report_path` pointing at the saved PNG and
 pytest
 ```
 
-19 tests cover `agent.py` (the update formula and its edge cases),
+30 tests cover `agent.py` (the update formula and its edge cases),
 `environment.py` (graph construction and the synchronous-step
-invariant), and `evaluate.py` (variance, convergence, and clustering
-against hand-built logs).
+invariant), `evaluate.py` (variance, convergence, and clustering against
+hand-built logs), `ratelimit.py` (the sliding-window counter), and
+`main.py` (the API end to end: the UI route, `/simulate` -> `/chart/{id}`,
+validation, and rate-limit behavior via `TestClient`).
+
+## Deployment
+
+The app is stateless aside from files under `output/` (chart PNGs +
+`report.json` per run), so it deploys as a single web process with no
+database.
+
+**Render (this repo's `render.yaml`):** New + -> Blueprint -> point it at
+this repo. It builds with `pip install -r requirements.txt` and starts
+with `uvicorn main:app --host 0.0.0.0 --port $PORT`, on Render's native
+Python runtime (no Docker build there). To do the same by hand in the
+Render dashboard instead of using the blueprint: New + -> Web Service,
+same build/start commands, health check path `/health`.
+
+**Anywhere else (Railway, Fly.io, a VPS):** this repo's `Dockerfile` —
+`docker build -t swarmsim . && docker run -p 8000:8000 -e PORT=8000
+swarmsim`.
+
+**Environment variables** (all optional, sensible local defaults):
+
+| Var | Default | Purpose |
+|---|---|---|
+| `ALLOWED_ORIGINS` | `*` | Comma-separated origins allowed by CORS, or `*` for any |
+| `RATE_LIMIT_MAX` | `10` | Max `/simulate` calls per client per window |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate limit window length |
+| `OUTPUT_DIR` | `./output` | Where chart PNGs + report.json are written |
+| `LOG_LEVEL` | `INFO` | Python logging level |
+
+**Public-deployment hardening already in `main.py`:**
+- `GET /chart/{run_id}` serves chart PNGs by URL (`run_id` validated
+  against a strict digits-only pattern before it ever touches the
+  filesystem) instead of `/simulate` returning a server-local path.
+- A per-client sliding-window rate limiter (`ratelimit.py`) sits in front
+  of `/simulate`, the one endpoint that does real CPU work.
+- `num_agents`/`num_rounds` are capped at 200 (not the 500 the pipeline
+  can technically handle) — 200x200 finishes in well under a second,
+  while 500x500 takes several seconds of CPU per request, which is a
+  cheap way to make this single process fall over if hit repeatedly.
+- A global exception handler returns a small stable JSON error and logs
+  server-side, instead of leaking a Python traceback to the client.
+- `GET /health` for the platform's liveness/health checks.
+
+**Known limitation:** the rate limiter and `output/` are in-process /
+on-disk state. Fine for the single-process deployment this is set up for;
+would need a shared store (Redis for the limiter, object storage or a
+persistent disk for charts) before running multiple workers or instances.
 
 ## Interview talking points
 
@@ -249,6 +304,12 @@ against hand-built logs).
   it's scored against explicit, thresholded criteria (did it converge, by
   when, into how many clusters), which is exactly the shape of an eval
   harness for a more complex agent system: run, log, score, summarize.
+- *Taking a service from "runs on my machine" to publicly deployable* —
+  the one CPU-heavy endpoint is rate-limited, parameter caps are set from
+  measured worst-case latency (not guessed), errors are caught and logged
+  instead of leaking tracebacks, and config (CORS origins, rate limit,
+  output dir) is environment-driven so the same code runs locally and on
+  Render without edits.
 
 **What I'd improve with more time:**
 - Swap the rule-based `Agent.update_opinion` for an optional "LLM-reaction"
