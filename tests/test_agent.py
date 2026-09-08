@@ -5,6 +5,8 @@ exactly right, so most of these tests check the formula against
 hand-computed expected values rather than just "does it run".
 """
 
+import pytest
+
 from agent import Agent
 
 
@@ -23,14 +25,17 @@ def test_update_opinion_matches_formula():
 
     result = a.update_opinion(neighbor_scores, noise=0.0, round_num=1)
 
-    assert result == expected
-    assert a.opinion_score == expected
+    # pytest.approx, not ==: this formula is plain float arithmetic, so it
+    # is subject to ordinary floating-point rounding (e.g. 0.32 vs.
+    # 0.32000000000000006) -- the rule is still exact, the bit pattern isn't.
+    assert result == pytest.approx(expected)
+    assert a.opinion_score == pytest.approx(expected)
 
 
 def test_update_opinion_no_neighbors_keeps_own_score_plus_noise():
     a = Agent(agent_id=0, persona={"stubbornness": 0.5}, opinion_score=0.3)
     result = a.update_opinion([], noise=0.1, round_num=1)
-    assert result == 0.4  # w*0.3 + (1-w)*0.3 (falls back to own score) + 0.1
+    assert result == pytest.approx(0.4)  # w*0.3 + (1-w)*0.3 (falls back to own score) + 0.1
 
 
 def test_update_opinion_result_stays_clipped():
