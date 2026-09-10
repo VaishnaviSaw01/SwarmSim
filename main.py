@@ -26,9 +26,11 @@ WHAT "hardened" means here, concretely:
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 
@@ -39,7 +41,7 @@ from pydantic import BaseModel, Field
 
 from evaluate import evaluate
 from ratelimit import RateLimiter
-from report import generate_chart, generate_report
+from report import generate_report, render_chart_png
 from simulate import run_simulation
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -50,10 +52,17 @@ app = FastAPI(
     description="Multi-agent opinion simulation engine -- offline, no external APIs.",
 )
 
-# --- config (env-driven so the same image runs locally and on Render) ---
+# --- config (env-driven so the same image runs locally and on Render/Cloud
+# Run/Vercel without edits) ---
 BASE_DIR = Path(__file__).parent
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "output"))
 STATIC_DIR = BASE_DIR / "static"
+
+# Default to the system temp dir, not a folder next to the source code:
+# on a serverless host (Vercel) or any read-only deployment filesystem,
+# only the OS temp dir is guaranteed writable. Set OUTPUT_DIR explicitly
+# (e.g. to "./output") for local development if you want the artifacts
+# to land next to the repo instead.
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", Path(tempfile.gettempdir()) / "swarmsim-output"))
 
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
 ALLOWED_ORIGINS = ["*"] if _allowed_origins == "*" else [o.strip() for o in _allowed_origins.split(",")]
@@ -94,7 +103,7 @@ class SimulateRequest(BaseModel):
 
 @app.post("/simulate")
 def simulate(request: SimulateRequest, http_request: Request) -> dict:
-    """Run one full simulation and return the JSON report + a chart URL.
+    """Run one full simulation and return the JSON report + the chart.
 
     Pipeline: seed (TF-IDF keywords + sentiment bias) -> environment
     (small-world graph + agents) -> simulate (round-by-round updates) ->
@@ -104,8 +113,11 @@ def simulate(request: SimulateRequest, http_request: Request) -> dict:
     CRUD endpoint, this one does real CPU work.
 
     Returns:
-        A dict mirroring the run's report.json, plus a run_id,
-        chart_url (fetch the PNG from here), and elapsed_seconds.
+        A dict with the run_id, params, seed info, metrics, the chart as
+        a data: URI (chart_data_url -- works everywhere, including
+        serverless hosts with no shared disk between requests),
+        chart_url (a best-effort GET route -- see get_chart), and
+        elapsed_seconds.
     """
     client_key = http_request.client.host if http_request.client else "unknown"
     allowed, retry_after = _simulate_limiter.allow(client_key)
@@ -129,17 +141,35 @@ def simulate(request: SimulateRequest, http_request: Request) -> dict:
     )
     metrics = evaluate(topic=request.topic, seed_info=seed_info, log=log)
 
+    # Build the chart once, in memory -- this is what actually gets
+    # delivered to the client (chart_data_url below), so it has to work
+    # even if nothing can be written to disk.
+    chart_bytes = render_chart_png(log)
+    chart_data_url = f"data:image/png;base64,{base64.b64encode(chart_bytes).decode()}"
+
     run_id = f"{int(time.time() * 1000)}"
     run_dir = OUTPUT_DIR / run_id
-    chart_path = generate_chart(log, run_dir / "chart.png")
-    report_path = generate_report(
-        topic=request.topic,
-        params={"num_agents": request.num_agents, "num_rounds": request.num_rounds},
-        seed_info=seed_info,
-        metrics=metrics,
-        chart_path=chart_path,
-        out_json_path=run_dir / "report.json",
-    )
+
+    # Writing the PNG/JSON to disk is a best-effort convenience (local
+    # inspection, or a same-instance GET /chart/{run_id}), not something
+    # the response depends on -- a read-only deployment filesystem
+    # shouldn't turn into a 500 for a request that already succeeded.
+    chart_path: Path | None = None
+    report_path: Path | None = None
+    try:
+        chart_path = run_dir / "chart.png"
+        chart_path.parent.mkdir(parents=True, exist_ok=True)
+        chart_path.write_bytes(chart_bytes)
+        report_path = generate_report(
+            topic=request.topic,
+            params={"num_agents": request.num_agents, "num_rounds": request.num_rounds},
+            seed_info=seed_info,
+            metrics=metrics,
+            chart_path=chart_path,
+            out_json_path=run_dir / "report.json",
+        )
+    except OSError:
+        logger.warning("Could not write run artifacts to disk for run_id=%s (non-fatal)", run_id)
 
     elapsed = time.monotonic() - start
     logger.info("simulate done run_id=%s elapsed=%.3fs", run_id, elapsed)
@@ -150,21 +180,24 @@ def simulate(request: SimulateRequest, http_request: Request) -> dict:
         "params": {"num_agents": request.num_agents, "num_rounds": request.num_rounds},
         "seed": seed_info,
         "metrics": metrics,
-        "chart_url": f"/chart/{run_id}",
-        "report_path": str(report_path),
+        "chart_data_url": chart_data_url,
+        "chart_url": f"/chart/{run_id}" if chart_path else None,
+        "report_path": str(report_path) if report_path else None,
         "elapsed_seconds": elapsed,
     }
 
 
 @app.get("/chart/{run_id}")
 def get_chart(run_id: str) -> FileResponse:
-    """Serve a previously generated chart PNG by run_id.
+    """Best-effort: serve a previously generated chart PNG by run_id.
 
-    WHY a dedicated route instead of returning a filesystem path: the
-    original /simulate response returned a local path on disk, which only
-    means something on the machine running the server. A public
-    deployment needs a URL a browser (or any other client) can actually
-    fetch -- this is that URL.
+    WHY "best-effort": this reads from local disk, which only exists
+    within a single warm process. On a single-instance host (Render,
+    Docker, a plain VPS, or Cloud Run at low traffic) it usually works;
+    on a serverless platform where each request can land on a different,
+    stateless invocation (Vercel), it will often 404 even for a run_id
+    that just succeeded. Use chart_data_url from the /simulate response
+    for the delivery method that's guaranteed to work everywhere.
 
     run_id is validated against a strict digits-only pattern (it's always
     a millisecond timestamp we generated) before touching the filesystem,
@@ -176,7 +209,7 @@ def get_chart(run_id: str) -> FileResponse:
 
     chart_path = OUTPUT_DIR / run_id / "chart.png"
     if not chart_path.is_file():
-        raise HTTPException(status_code=404, detail="Chart not found")
+        raise HTTPException(status_code=404, detail="Chart not found (try chart_data_url instead)")
 
     return FileResponse(chart_path, media_type="image/png")
 

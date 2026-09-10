@@ -277,7 +277,7 @@
     }
 
     const chartEl = document.getElementById("chart");
-    chartEl.src = `${data.chart_url}?t=${Date.now()}`;
+    chartEl.src = data.chart_data_url;
 
     document.getElementById("raw-json").textContent = JSON.stringify(data, null, 2);
 

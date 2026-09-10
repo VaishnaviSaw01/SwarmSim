@@ -224,10 +224,11 @@ curl -X POST http://127.0.0.1:8000/simulate \
 ```
 
 Each call returns a JSON report (topic, params, seed info, metrics,
-summary) plus `chart_url` (fetch the PNG from `GET {chart_url}`) and
-`report_path` (where `report.json` landed under `output/<run_id>/` on the
-server). `num_agents` / `num_rounds` are capped at 200 each on this
-endpoint — see "Deployment" below for why.
+summary) plus `chart_data_url` — the chart PNG inline as base64, ready to
+drop straight into an `<img src="...">` — and, best-effort, `chart_url` /
+`report_path` pointing at a local copy on the server (not guaranteed on
+every host — see "Deployment" below). `num_agents` / `num_rounds` are
+capped at 200 each on this endpoint — see "Deployment" for why.
 
 ### Running the tests
 
@@ -244,14 +245,29 @@ validation, and rate-limit behavior via `TestClient`).
 
 ## Deployment
 
-The app is stateless aside from files under `output/` (chart PNGs +
-`report.json` per run), so it deploys as a single web process with no
-database.
+The chart PNG is delivered inline as base64 in the `/simulate` response
+(`chart_data_url`) rather than written to a file and fetched by a second
+request — that works identically whether the host keeps one warm process
+around (Render, a VPS, Docker) or runs every request as an independent,
+stateless invocation with no shared disk (Vercel). Writing a copy to disk
+(`OUTPUT_DIR`, default the OS temp dir) is a best-effort side effect for
+local inspection, not something any response depends on — see
+`GET /chart/{run_id}`'s docstring in [main.py](main.py) for exactly when
+that route does and doesn't work.
 
-**Google Cloud Run (currently deployed here — see below for the live
-URL):** builds and runs this repo's `Dockerfile` as-is (it already binds
-`0.0.0.0` and reads the `$PORT` Cloud Run injects at runtime, so no
-Cloud-Run-specific changes were needed). Two ways to deploy:
+**Vercel:** zero-config — Vercel's Python runtime auto-detects `main.py`'s
+top-level `app` (FastAPI) and `requirements.txt`. Import this repo at
+[vercel.com/new](https://vercel.com/new), or `vercel deploy` from the repo
+root. `vercel.json` excludes `tests/` etc. from the function bundle but
+deliberately *keeps* `static/` in it, since `main.py` reads
+`static/index.html` off disk at request time. Free (Hobby plan): 500 MB
+Python bundle limit (comfortably fits scikit-learn + matplotlib + scipy),
+10s execution timeout (this app's worst case is under 1s).
+
+**Google Cloud Run:** builds and runs this repo's `Dockerfile` as-is (it
+already binds `0.0.0.0` and reads the `$PORT` Cloud Run injects at
+runtime, so no Cloud-Run-specific changes were needed). Two ways to
+deploy:
 
 - *Console, no CLI needed:* Cloud Run -> Create Service -> "Continuously
   deploy from a repository" -> connect this GitHub repo, branch `main` ->
@@ -267,7 +283,10 @@ Cloud-Run-specific changes were needed). Two ways to deploy:
 
 Cloud Run's always-free tier (2M requests/month, well beyond what a demo
 gets) means this costs $0 as long as usage stays under that quota, which
-a portfolio/interview demo will not come close to.
+a portfolio/interview demo will not come close to — but it does require
+adding a card to the Google Cloud project for billing verification, and
+that verification step can itself fail for reasons outside this repo's
+control (issuing bank declines, region restrictions, prior free-trial use).
 
 **Render (this repo's `render.yaml`):** New + -> Blueprint -> point it at
 this repo. It builds with `pip install -r requirements.txt` and starts
@@ -294,13 +313,17 @@ swarmsim`.
 | `ALLOWED_ORIGINS` | `*` | Comma-separated origins allowed by CORS, or `*` for any |
 | `RATE_LIMIT_MAX` | `10` | Max `/simulate` calls per client per window |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate limit window length |
-| `OUTPUT_DIR` | `./output` | Where chart PNGs + report.json are written |
+| `OUTPUT_DIR` | OS temp dir | Where chart PNGs + report.json are (best-effort) written; set to `./output` for local dev if you want them next to the repo |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 
 **Public-deployment hardening already in `main.py`:**
-- `GET /chart/{run_id}` serves chart PNGs by URL (`run_id` validated
-  against a strict digits-only pattern before it ever touches the
-  filesystem) instead of `/simulate` returning a server-local path.
+- The chart is returned inline as base64 (`chart_data_url`) instead of
+  `/simulate` returning a server-local path — works on a stateless
+  serverless host with no disk shared between requests, not just a
+  single always-on process. `GET /chart/{run_id}` still exists as a
+  best-effort convenience where a real filesystem persists across
+  requests (`run_id` is validated against a strict digits-only pattern
+  before it ever touches the filesystem).
 - A per-client sliding-window rate limiter (`ratelimit.py`) sits in front
   of `/simulate`, the one endpoint that does real CPU work.
 - `num_agents`/`num_rounds` are capped at 200 (not the 500 the pipeline
@@ -309,12 +332,18 @@ swarmsim`.
   cheap way to make this single process fall over if hit repeatedly.
 - A global exception handler returns a small stable JSON error and logs
   server-side, instead of leaking a Python traceback to the client.
+- Writing the on-disk copy (chart PNG + report.json) is wrapped so a
+  read-only or ephemeral filesystem degrades to "no local copy" rather
+  than a 500 — the client-facing response never depended on that write
+  succeeding.
 - `GET /health` for the platform's liveness/health checks.
 
-**Known limitation:** the rate limiter and `output/` are in-process /
-on-disk state. Fine for the single-process deployment this is set up for;
-would need a shared store (Redis for the limiter, object storage or a
-persistent disk for charts) before running multiple workers or instances.
+**Known limitation:** the rate limiter's state is in-process (per
+`RateLimiter` instance), so it isn't shared across multiple workers,
+instances, or serverless invocations. Fine for a single-process
+deployment or for demo-level serverless traffic; would need a shared
+store (Redis) to stay correct once traffic is split across many
+concurrent workers.
 
 ## Interview talking points
 

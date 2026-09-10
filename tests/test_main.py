@@ -7,6 +7,8 @@ shared across every test in this file since it lives on the `main`
 module for the process's lifetime.
 """
 
+import base64
+
 import main
 from ratelimit import RateLimiter
 
@@ -32,7 +34,7 @@ def test_health_endpoint():
     assert resp.json() == {"status": "ok"}
 
 
-def test_simulate_returns_report_and_chart_is_fetchable():
+def test_simulate_returns_report_and_inline_chart():
     resp = client.post(
         "/simulate",
         json={"topic": "remote work policy", "num_agents": 8, "num_rounds": 5},
@@ -40,10 +42,19 @@ def test_simulate_returns_report_and_chart_is_fetchable():
     assert resp.status_code == 200
     data = resp.json()
 
-    assert set(data) >= {"run_id", "metrics", "chart_url", "elapsed_seconds"}
-    assert data["chart_url"] == f"/chart/{data['run_id']}"
+    assert set(data) >= {"run_id", "metrics", "chart_data_url", "chart_url", "elapsed_seconds"}
     assert "summary" in data["metrics"]
 
+    # chart_data_url is the delivery method guaranteed to work on every
+    # host (including serverless platforms with no shared disk between
+    # requests) -- it must always be present and well-formed, independent
+    # of whether the disk write behind chart_url succeeded.
+    assert data["chart_data_url"].startswith("data:image/png;base64,")
+    base64.b64decode(data["chart_data_url"].split(",", 1)[1])  # raises if malformed
+
+    # chart_url is best-effort (see get_chart's docstring) but should work
+    # in this same-process test environment.
+    assert data["chart_url"] == f"/chart/{data['run_id']}"
     chart_resp = client.get(data["chart_url"])
     assert chart_resp.status_code == 200
     assert chart_resp.headers["content-type"] == "image/png"

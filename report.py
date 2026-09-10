@@ -1,16 +1,26 @@
 """
-report.py -- renders a simulation run to disk: a PNG line chart of every
-agent's opinion trajectory, and a JSON report bundling the run's
-parameters, seed info, and evaluation metrics.
+report.py -- renders a simulation run into two artifacts: a PNG line
+chart of every agent's opinion trajectory, and a JSON report bundling the
+run's parameters, seed info, and evaluation metrics.
 
 WHY matplotlib and plain JSON: both are inspectable, run fully offline,
 and don't introduce any dependency the rest of the project doesn't already
 need to explain. No templating engine, no report framework -- just a
 chart and a dict.
+
+WHY the chart is built as bytes first, disk second: main.py needs to hand
+the chart back to the client in the HTTP response itself (as inline
+base64), not just leave it on disk -- serverless hosts (Vercel) run each
+request as a stateless invocation with no shared local filesystem between
+calls, so a separate "write a file, then serve it via a later GET" only
+works by coincidence on platforms that happen to keep one warm process
+around. Building PNG bytes in memory first, and treating the on-disk copy
+as an optional side effect, makes the same code correct everywhere.
 """
 
 from __future__ import annotations
 
+import io
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -21,12 +31,8 @@ matplotlib.use("Agg")  # headless -- this runs inside a FastAPI request, not a G
 import matplotlib.pyplot as plt
 
 
-def generate_chart(
-    log: list[dict],
-    out_path: str | Path,
-    title: str = "Opinion score per agent per round",
-) -> Path:
-    """Plot every agent's opinion_score across rounds as one line each.
+def render_chart_png(log: list[dict], title: str = "Opinion score per agent per round") -> bytes:
+    """Plot every agent's opinion_score across rounds and return PNG bytes.
 
     WHY one line per agent rather than a smoothed aggregate: for a project
     about *inspecting* agent behavior, seeing individual trajectories (who
@@ -36,11 +42,10 @@ def generate_chart(
 
     Args:
         log: round-by-round log from simulate.run_simulation.
-        out_path: where to save the PNG.
         title: chart title.
 
     Returns:
-        The resolved Path the chart was written to.
+        Raw PNG bytes (nothing touches disk here).
     """
     by_agent: dict[int, list[tuple[int, float]]] = defaultdict(list)
     for row in log:
@@ -62,10 +67,33 @@ def generate_chart(
     ax.set_title(title)
     fig.tight_layout()
 
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=120)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def generate_chart(
+    log: list[dict],
+    out_path: str | Path,
+    title: str = "Opinion score per agent per round",
+) -> Path:
+    """Render the chart (via render_chart_png) and write it to out_path.
+
+    A thin disk-writing wrapper around render_chart_png -- kept for local
+    development convenience and for hosts with a real filesystem (Render,
+    Docker, a plain VPS). Not relied on for actually delivering the chart
+    to a client; see main.py's chart_data_url in the /simulate response
+    for that.
+
+    Returns:
+        The resolved Path the chart was written to.
+    """
+    png_bytes = render_chart_png(log, title=title)
+
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=120)
-    plt.close(fig)
+    out_path.write_bytes(png_bytes)
     return out_path
 
 
