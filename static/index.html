@@ -6,211 +6,349 @@
 <title>SwarmSim</title>
 <style>
   :root {
-    --bg: #f7f7f5;
-    --panel: #ffffff;
-    --border: #e3e2de;
-    --text: #1f1e1c;
-    --muted: #6b6a66;
-    --accent: #2f6f4f;
-    --accent-text: #ffffff;
-    --error-bg: #fdecea;
-    --error-text: #93231a;
-    --code-bg: #f1f0ec;
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --panel:       #fcfcfb;
+    --panel-2:     #f4f3f0;
+    --border:      #e1e0d9;
+    --text:        #0b0b0b;
+    --muted:       #52514e;
+    --muted-2:     #898781;
+    --accent:      #2f6f4f;
+    --accent-ink:  #ffffff;
+    --accent-wash: #e9f2ec;
+    --favorable:   #2a78d6;
+    --opposed:     #e34948;
+    --neutral-fill:#c3c2b7;
+    --error-bg:    #fdecea;
+    --error-text:  #93231a;
+    --code-bg:     #f1f0ec;
+    --chip-bg:     #ffffff;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #16171a;
-      --panel: #1e2023;
-      --border: #303236;
-      --text: #eceae6;
-      --muted: #9a9994;
-      --accent: #59b389;
-      --accent-text: #0b1210;
-      --error-bg: #3a1c1a;
-      --error-text: #f4a79e;
-      --code-bg: #26282b;
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:        #0d0d0d;
+      --panel:       #1a1a19;
+      --panel-2:     #202020;
+      --border:      #2c2c2a;
+      --text:        #ffffff;
+      --muted:       #c3c2b7;
+      --muted-2:     #898781;
+      --accent:      #59b389;
+      --accent-ink:  #0b1210;
+      --accent-wash: #16261f;
+      --favorable:   #3987e5;
+      --opposed:     #e66767;
+      --neutral-fill:#383835;
+      --error-bg:    #3a1c1a;
+      --error-text:  #f4a79e;
+      --code-bg:     #202020;
+      --chip-bg:     #1f211f;
     }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:        #0d0d0d;
+    --panel:       #1a1a19;
+    --panel-2:     #202020;
+    --border:      #2c2c2a;
+    --text:        #ffffff;
+    --muted:       #c3c2b7;
+    --muted-2:     #898781;
+    --accent:      #59b389;
+    --accent-ink:  #0b1210;
+    --accent-wash: #16261f;
+    --favorable:   #3987e5;
+    --opposed:     #e66767;
+    --neutral-fill:#4a4a47;
+    --error-bg:    #3a1c1a;
+    --error-text:  #f4a79e;
+    --code-bg:     #202020;
+    --chip-bg:     #1f211f;
   }
 
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    background: var(--bg);
+    background: var(--page);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.45;
+    line-height: 1.5;
   }
-  .wrap {
-    max-width: 780px;
-    margin: 0 auto;
-    padding: 40px 20px 80px;
-  }
-  header h1 {
-    font-size: 1.6rem;
-    margin: 0 0 4px;
-    letter-spacing: -0.01em;
-  }
-  header p {
-    color: var(--muted);
-    margin: 0 0 28px;
-    font-size: 0.95rem;
-  }
+  a { color: inherit; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px; }
 
+  /* ---- nav ---- */
+  nav.topnav {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--page) 88%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav.topnav .wrap { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+  .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+  .navlinks { display: flex; gap: 22px; font-size: 0.88rem; color: var(--muted); }
+  .navlinks a { text-decoration: none; }
+  .navlinks a:hover { color: var(--text); }
+
+  /* ---- hero ---- */
+  .hero { padding: 64px 0 40px; text-align: center; }
+  .hero h1 { font-size: clamp(1.9rem, 4vw, 2.7rem); margin: 0 0 14px; letter-spacing: -0.02em; }
+  .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 620px; margin: 0 auto 26px; }
+  .hero-ctas { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 8px; padding: 11px 20px; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; text-decoration: none; border: 1px solid transparent;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
+  .btn-secondary { background: transparent; color: var(--text); border-color: var(--border); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+
+  .chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 6px 14px; font-size: 0.82rem; cursor: pointer;
+  }
+  .chip:hover { color: var(--text); border-color: var(--muted-2); }
+
+  .caveat { color: var(--muted-2); font-size: 0.8rem; margin-top: 18px; }
+
+  /* ---- sections ---- */
+  section { padding: 36px 0; }
+  h2.section-title { font-size: 1.4rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p.section-sub { color: var(--muted); margin: 0 0 26px; max-width: 640px; }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 480px) { .steps { grid-template-columns: 1fr; } }
+  .step-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px;
+  }
+  .step-card .n { font-size: 0.78rem; color: var(--muted-2); font-weight: 700; margin-bottom: 10px; }
+  .step-card h3 { font-size: 0.98rem; margin: 0 0 6px; }
+  .step-card p { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+  .uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .uses { grid-template-columns: 1fr; } }
+  .use-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+  }
+  .use-card .tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
+  .use-card h3 { font-size: 1rem; margin: 0 0 6px; }
+  .use-card p { font-size: 0.86rem; color: var(--muted); margin: 0; }
+
+  /* ---- form panel ---- */
   .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 22px;
-    margin-bottom: 20px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin-bottom: 20px;
   }
-
-  form .row {
-    margin-bottom: 14px;
-  }
-  form label {
-    display: block;
-    font-size: 0.82rem;
-    font-weight: 600;
-    margin-bottom: 6px;
-    color: var(--muted);
-  }
-  form .grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-  }
+  form .row { margin-bottom: 14px; }
+  form label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px; color: var(--muted); }
+  form .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   input[type="text"], input[type="number"] {
-    width: 100%;
-    padding: 9px 11px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-    font-size: 0.95rem;
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--page); color: var(--text); font-size: 0.95rem;
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-  button {
-    background: var(--accent);
-    color: var(--accent-text);
-    border: none;
-    border-radius: 8px;
-    padding: 10px 18px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:disabled { opacity: 0.6; cursor: default; }
-
-  .hint {
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-top: 10px;
-  }
-
+  .hint { font-size: 0.8rem; color: var(--muted-2); margin-top: 10px; }
   #status { font-size: 0.9rem; color: var(--muted); margin-top: 12px; }
+  #error { background: var(--error-bg); color: var(--error-text); border-radius: 8px; padding: 12px 14px; font-size: 0.88rem; margin-top: 12px; }
 
-  #error {
-    background: var(--error-bg);
-    color: var(--error-text);
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-size: 0.88rem;
-    margin-top: 12px;
+  /* ---- results ---- */
+  #results { display: none; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .verdict-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .verdict-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-wash); color: var(--accent); border-radius: 999px;
+    padding: 6px 14px; font-size: 0.85rem; font-weight: 700;
   }
+  .verdict-badge .swatch { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  #summary { font-size: 0.94rem; color: var(--text); margin: 0 0 20px; }
 
-  #results { display: none; }
-
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 12px;
-    margin: 16px 0;
-  }
-  .stat {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-  }
-  .stat .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 26px; }
+  .stat { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+  .stat .label { font-size: 0.7rem; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.03em; }
   .stat .value { font-size: 1.2rem; font-weight: 600; margin-top: 2px; }
 
-  #summary {
-    font-size: 0.92rem;
-    margin: 0 0 16px;
-  }
+  .block-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-2); font-weight: 700; margin: 0 0 10px; }
 
-  #chart {
-    width: 100%;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    display: block;
-  }
+  /* distribution bar */
+  .dist-bar { display: flex; gap: 2px; height: 22px; border-radius: 6px; overflow: hidden; margin-bottom: 10px; background: var(--panel); }
+  .dist-seg { height: 100%; }
+  .dist-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 26px; font-size: 0.85rem; }
+  .dist-legend .item { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .dist-legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .dist-legend b { color: var(--text); }
+
+  /* cluster + swing cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 26px; }
+  .mini-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+  .mini-card .top-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .mini-card .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .mini-card .title { font-size: 0.85rem; font-weight: 600; }
+  .mini-card .detail { font-size: 0.8rem; color: var(--muted); }
+  .mini-card .move { font-variant-numeric: tabular-nums; }
+
+  #chart-wrap { background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 6px; }
+  #chart { width: 100%; display: block; border-radius: 4px; }
 
   details { margin-top: 16px; }
   summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); }
-  pre#raw-json {
-    background: var(--code-bg);
-    border-radius: 8px;
-    padding: 12px;
-    overflow-x: auto;
-    font-size: 0.78rem;
-    margin-top: 10px;
-  }
+  pre#raw-json { background: var(--code-bg); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 0.78rem; margin-top: 10px; }
 
-  footer {
-    margin-top: 30px;
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-  footer a { color: inherit; }
+  footer { padding: 30px 0 60px; font-size: 0.8rem; color: var(--muted-2); border-top: 1px solid var(--border); margin-top: 20px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>SwarmSim</h1>
-    <p>A lightweight multi-agent opinion simulation engine. Give it a topic, watch a swarm of agents on a small-world graph argue their way toward (or away from) agreement.</p>
-  </header>
 
-  <div class="panel">
-    <form id="sim-form">
-      <div class="row">
-        <label for="topic">Topic</label>
-        <input type="text" id="topic" name="topic" placeholder="new company policy on remote work" required />
-      </div>
-      <div class="row grid-2">
-        <div>
-          <label for="num_agents">Agents</label>
-          <input type="number" id="num_agents" name="num_agents" value="30" min="4" max="200" required />
-        </div>
-        <div>
-          <label for="num_rounds">Rounds</label>
-          <input type="number" id="num_rounds" name="num_rounds" value="30" min="1" max="200" required />
-        </div>
-      </div>
-      <button type="submit" id="submit-btn">Run simulation</button>
-      <div class="hint">Runs the full seed &rarr; environment &rarr; simulate &rarr; evaluate &rarr; report pipeline server-side, offline, no external APIs.</div>
-      <div id="status"></div>
-      <div id="error" hidden></div>
-    </form>
+<nav class="topnav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot"></span>SwarmSim</a>
+    <div class="navlinks">
+      <a href="#how">How it works</a>
+      <a href="#try">Try it</a>
+      <a href="/docs">API docs</a>
+      <a href="https://github.com/VaishnaviSaw01/SwarmSim" target="_blank" rel="noopener">GitHub</a>
+    </div>
   </div>
+</nav>
 
-  <div class="panel" id="results">
-    <p id="summary"></p>
-    <div class="stats" id="stats"></div>
-    <img id="chart" alt="Opinion score per agent per round" />
-    <details>
-      <summary>View raw report JSON</summary>
-      <pre id="raw-json"></pre>
-    </details>
-  </div>
+<div class="wrap" id="top">
+  <section class="hero">
+    <h1>Watch a swarm change its mind.</h1>
+    <p class="sub">SwarmSim seeds a population of simple agents from a topic string, drops them on a
+      small-world social graph, and lets a plain weighted-average update rule run for N rounds &mdash;
+      then reports whether, how fast, and which way the swarm settled.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="#try">Run a simulation</a>
+      <a class="btn btn-secondary" href="#how">See how it works</a>
+    </div>
+    <div class="chips" id="chip-row">
+      <button class="chip" data-topic="flexible remote work improves productivity and trust">flexible remote work improves productivity and trust</button>
+      <button class="chip" data-topic="mandatory return to office is a burden and unfair surveillance">mandatory return to office is a burden and unfair surveillance</button>
+      <button class="chip" data-topic="new company policy on remote work">new company policy on remote work</button>
+    </div>
+    <p class="caveat">A simplified, rule-based simulation for demonstrating the environment &mdash; not a real-world forecast.</p>
+  </section>
 
-  <footer>
-    API docs at <a href="/docs">/docs</a> &middot; source on
-    <a href="https://github.com/VaishnaviSaw01/SwarmSim" target="_blank" rel="noopener">GitHub</a>
-  </footer>
+  <section id="how">
+    <h2 class="section-title">How it works</h2>
+    <p class="section-sub">Four plain steps, each one a small Python module with no hidden model in it &mdash; see the <a href="https://github.com/VaishnaviSaw01/SwarmSim#the-interaction-rule" target="_blank" rel="noopener">README</a> for the exact formula.</p>
+    <div class="steps">
+      <div class="step-card">
+        <div class="n">01 &middot; seed.py</div>
+        <h3>Seed</h3>
+        <p>TF-IDF pulls the topic's top keywords; a small hardcoded word list scores them positive/negative into one bias number.</p>
+      </div>
+      <div class="step-card">
+        <div class="n">02 &middot; environment.py</div>
+        <h3>Environment</h3>
+        <p>A small-world graph (networkx) seats every agent with local neighbors plus a few long-range shortcuts; opinions start scattered around the bias.</p>
+      </div>
+      <div class="step-card">
+        <div class="n">03 &middot; simulate.py</div>
+        <h3>Simulate</h3>
+        <p>Each round, every agent's opinion becomes a stubbornness-weighted average of its neighbors' opinions, plus a little noise.</p>
+      </div>
+      <div class="step-card">
+        <div class="n">04 &middot; evaluate.py</div>
+        <h3>Evaluate</h3>
+        <p>Variance, convergence round, opinion clusters, and a favorable/neutral/opposed split &mdash; scored, not eyeballed.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="uses">
+    <h2 class="section-title">What it's actually good for</h2>
+    <p class="section-sub">A whiteboard-simple environment, not a forecasting product &mdash; these are the honest use cases.</p>
+    <div class="uses">
+      <div class="use-card">
+        <div class="tag">Message framing</div>
+        <h3>Sandbox a framing before you send it</h3>
+        <p>Run the same announcement worded two ways and compare the simulated lean &mdash; a cheap intuition check, not a survey replacement.</p>
+      </div>
+      <div class="use-card">
+        <div class="tag">Teaching</div>
+        <h3>Demonstrate opinion dynamics</h3>
+        <p>Every rule is one line you can put on a whiteboard: graph topology, a weighted-average update, and threshold-based evaluation.</p>
+      </div>
+      <div class="use-card">
+        <div class="tag">Extensibility</div>
+        <h3>Swap in a smarter agent</h3>
+        <p>The update rule is the only part that's "dumb." Replace it with an LLM-judged reaction and the graph, logging, and evaluation layers don't change.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="try">
+    <h2 class="section-title">Try it</h2>
+    <p class="section-sub">Runs the full pipeline server-side, offline, in well under a second.</p>
+
+    <div class="panel">
+      <form id="sim-form">
+        <div class="row">
+          <label for="topic">Topic</label>
+          <input type="text" id="topic" name="topic" placeholder="new company policy on remote work" required />
+        </div>
+        <div class="row grid-2">
+          <div>
+            <label for="num_agents">Agents</label>
+            <input type="number" id="num_agents" name="num_agents" value="30" min="4" max="200" required />
+          </div>
+          <div>
+            <label for="num_rounds">Rounds</label>
+            <input type="number" id="num_rounds" name="num_rounds" value="30" min="1" max="200" required />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submit-btn">Run simulation</button>
+        <div class="hint">seed &rarr; environment &rarr; simulate &rarr; evaluate &rarr; report, no external APIs.</div>
+        <div id="status"></div>
+        <div id="error" hidden></div>
+      </form>
+    </div>
+
+    <div id="results">
+      <div class="verdict-row">
+        <span class="verdict-badge"><span class="swatch"></span><span id="verdict-text"></span></span>
+        <span id="elapsed-text" class="hint" style="margin:0;"></span>
+      </div>
+      <p id="summary"></p>
+
+      <p class="block-title">Final lean</p>
+      <div class="dist-bar" id="dist-bar"></div>
+      <div class="dist-legend" id="dist-legend"></div>
+
+      <p class="block-title">Clusters</p>
+      <div class="card-grid" id="cluster-cards"></div>
+
+      <p class="block-title">Movement</p>
+      <div class="card-grid" id="swing-cards"></div>
+
+      <div class="stats" id="stats"></div>
+
+      <p class="block-title">Opinion score per agent per round</p>
+      <div id="chart-wrap"><img id="chart" alt="Opinion score per agent per round" /></div>
+
+      <details>
+        <summary>View raw report JSON</summary>
+        <pre id="raw-json"></pre>
+      </details>
+    </div>
+  </section>
 </div>
+
+<footer>
+  <div class="wrap">
+    <span>SwarmSim &mdash; simplified rule-based simulation, not a real-world forecast.</span>
+    <span>API docs at <a href="/docs">/docs</a> &middot; source on <a href="https://github.com/VaishnaviSaw01/SwarmSim" target="_blank" rel="noopener">GitHub</a></span>
+  </div>
+</footer>
 
 <script>
   const form = document.getElementById("sim-form");
@@ -218,6 +356,22 @@
   const errorEl = document.getElementById("error");
   const resultsEl = document.getElementById("results");
   const submitBtn = document.getElementById("submit-btn");
+  const topicInput = document.getElementById("topic");
+
+  const LEAN_COLOR = {
+    favorable: "var(--favorable)",
+    neutral: "var(--neutral-fill)",
+    opposed: "var(--opposed)",
+  };
+  const LEAN_LABEL = { favorable: "Favorable", neutral: "Neutral", opposed: "Opposed" };
+
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      topicInput.value = chip.dataset.topic;
+      document.getElementById("try").scrollIntoView({ behavior: "smooth", block: "start" });
+      form.requestSubmit();
+    });
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -227,7 +381,7 @@
     statusEl.textContent = "Running simulation...";
 
     const payload = {
-      topic: document.getElementById("topic").value,
+      topic: topicInput.value,
       num_agents: Number(document.getElementById("num_agents").value),
       num_rounds: Number(document.getElementById("num_rounds").value),
     };
@@ -247,7 +401,7 @@
 
       const data = await resp.json();
       renderResults(data);
-      statusEl.textContent = `Done in ${data.elapsed_seconds.toFixed(2)}s`;
+      statusEl.textContent = "";
     } catch (err) {
       errorEl.textContent = err.message || "Something went wrong.";
       errorEl.hidden = false;
@@ -258,13 +412,67 @@
   });
 
   function renderResults(data) {
-    document.getElementById("summary").textContent = data.metrics.summary;
+    const m = data.metrics;
 
+    document.getElementById("verdict-text").textContent = m.verdict;
+    document.getElementById("elapsed-text").textContent = `Done in ${data.elapsed_seconds.toFixed(2)}s`;
+    document.getElementById("summary").textContent = m.summary;
+
+    // Distribution bar + legend
+    const distBar = document.getElementById("dist-bar");
+    const distLegend = document.getElementById("dist-legend");
+    distBar.innerHTML = "";
+    distLegend.innerHTML = "";
+    for (const lean of ["favorable", "neutral", "opposed"]) {
+      const d = m.distribution[lean];
+      const seg = document.createElement("div");
+      seg.className = "dist-seg";
+      seg.style.width = `${d.pct}%`;
+      seg.style.background = LEAN_COLOR[lean];
+      seg.title = `${LEAN_LABEL[lean]}: ${d.pct}% (${d.count} agents)`;
+      if (d.pct > 0) distBar.appendChild(seg);
+
+      const item = document.createElement("div");
+      item.className = "item";
+      item.innerHTML = `<span class="swatch" style="background:${LEAN_COLOR[lean]}"></span>${LEAN_LABEL[lean]}: <b>${d.pct}%</b> (${d.count})`;
+      distLegend.appendChild(item);
+    }
+
+    // Cluster cards
+    const clusterEl = document.getElementById("cluster-cards");
+    clusterEl.innerHTML = "";
+    m.clusters.forEach((c, i) => {
+      const card = document.createElement("div");
+      card.className = "mini-card";
+      card.innerHTML = `
+        <div class="top-row"><span class="swatch" style="background:${LEAN_COLOR[c.lean]}"></span><span class="title">Cluster ${i + 1} &mdash; ${c.pct}%</span></div>
+        <div class="detail">${c.size} agent(s), mean ${c.mean_score.toFixed(2)}, leans ${LEAN_LABEL[c.lean].toLowerCase()}</div>`;
+      clusterEl.appendChild(card);
+    });
+
+    // Swing agent cards
+    const swingEl = document.getElementById("swing-cards");
+    swingEl.innerHTML = "";
+    if (m.swing) {
+      const rows = [
+        ["Most persuaded", m.swing.most_persuaded],
+        ["Most steadfast", m.swing.most_steadfast],
+      ];
+      for (const [label, s] of rows) {
+        const card = document.createElement("div");
+        card.className = "mini-card";
+        card.innerHTML = `
+          <div class="top-row"><span class="title">${label} &mdash; Agent #${s.agent_id}</span></div>
+          <div class="detail move">${s.from.toFixed(2)} &rarr; ${s.to.toFixed(2)} (${s.movement >= 0 ? "+" : ""}${s.movement.toFixed(2)})</div>`;
+        swingEl.appendChild(card);
+      }
+    }
+
+    // Stat tiles
     const stats = [
-      ["Initial variance", data.metrics.initial_variance.toFixed(3)],
-      ["Final variance", data.metrics.final_variance.toFixed(3)],
-      ["Convergence round", data.metrics.convergence_round ?? "did not converge"],
-      ["Opinion clusters", data.metrics.num_clusters],
+      ["Initial variance", m.initial_variance.toFixed(3)],
+      ["Final variance", m.final_variance.toFixed(3)],
+      ["Convergence round", m.convergence_round ?? "none"],
       ["Keyword bias", data.seed.bias.toFixed(2)],
     ];
     const statsEl = document.getElementById("stats");
@@ -276,9 +484,7 @@
       statsEl.appendChild(div);
     }
 
-    const chartEl = document.getElementById("chart");
-    chartEl.src = data.chart_data_url;
-
+    document.getElementById("chart").src = data.chart_data_url;
     document.getElementById("raw-json").textContent = JSON.stringify(data, null, 2);
 
     resultsEl.style.display = "block";
