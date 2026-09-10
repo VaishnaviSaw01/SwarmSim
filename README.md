@@ -118,7 +118,9 @@ leave nothing for the simulation to converge *from*.
 ## Evaluation metrics
 
 All computed in `evaluate.py` from the round-by-round log, no fitted
-models involved:
+models or LLM calls involved. `LEAN_THRESHOLD` (`0.15`) is the one number
+the module leans on twice — reused rather than inventing a second magic
+constant:
 
 - **Variance per round** — population variance of `opinion_score` across
   all agents at each round. `0` = total agreement, larger = still split.
@@ -126,19 +128,34 @@ models involved:
   threshold (default `0.01`) **and stays below it through the end of the
   run**. Requiring it to hold prevents a single noisy dip from being
   reported as convergence.
-- **Number of opinion clusters** — connected components of a graph where
-  two agents are linked if their *final* opinions are within `eps`
-  (default `0.15`) of each other. This sidesteps having to pick `k` up
-  front the way k-means would: a chain of mutually-close agents collapses
-  into one cluster even if its two ends are far apart, which is exactly
-  the "camp" structure we're trying to detect.
+- **Opinion clusters** — connected components of a graph where two agents
+  are linked if their *final* opinions are within `LEAN_THRESHOLD` of each
+  other. This sidesteps having to pick `k` up front the way k-means
+  would: a chain of mutually-close agents collapses into one cluster even
+  if its two ends are far apart, which is exactly the "camp" structure
+  we're trying to detect. `cluster_breakdown()` reports each cluster's
+  size, share of the population, mean opinion, and lean (favorable /
+  opposed / neutral).
+- **Distribution** — `opinion_distribution()` buckets every agent's final
+  score as favorable (`> 0.15`), opposed (`< -0.15`), or neutral, and
+  reports the count/percentage in each bucket. This answers "which way,
+  and how many" — the question variance alone can't.
+- **Verdict** — `classify_outcome()` turns the cluster breakdown into a
+  one-line label: `Consensus` (one cluster), `Polarized` (2+ clusters,
+  the two largest each ≥25% of the population), or `Majority with
+  holdouts` (one dominant cluster plus smaller holdout groups). Not a new
+  computation — just a name for a shape already in the data.
+- **Swing agents** — `swing_agents()` finds the single agent that moved
+  most from round 0 to the final round, and the one that moved least: a
+  concrete, checkable detail alongside the aggregate numbers.
 - **Text summary** — a formatted string built directly from the numbers
   above (not generated text) so it's always consistent with the report.
 
 ## Sample run
 
 Actual output from this repo, topic `"new company policy on remote work"`,
-30 agents, 30 rounds, default parameters:
+30 agents, 30 rounds, default parameters (`seed=42`, so this exact run is
+reproducible):
 
 ```
 seed:
@@ -149,23 +166,29 @@ metrics:
   initial_variance (round 0):  0.0443
   final_variance   (round 30): 0.0016
   convergence_round: 3
-  num_clusters: 1
-
-  variance every 5 rounds:
-    round  0: 0.0443
-    round  5: 0.0075
-    round 10: 0.0032
-    round 15: 0.0043
-    round 20: 0.0020
-    round 25: 0.0019
-    round 30: 0.0016
+  verdict: "Consensus"
+  distribution: favorable 0.0% (0), neutral 100.0% (30), opposed 0.0% (0)
+  clusters: [{size: 30, pct: 100.0, mean_score: -0.066, lean: "neutral"}]
+  swing:
+    most_persuaded: agent #2,  -0.50 -> 0.02  (moved +0.53)
+    most_steadfast: agent #28, -0.14 -> -0.12 (moved +0.02)
 
 summary: "Topic 'new company policy on remote work' started from a
   neutral keyword bias of 0.00 (keywords: company, new, policy, remote,
   work). Opinion variance moved from 0.044 at round 0 to 0.002 at the
   final round, converging (variance < 0.01) at round 3. The swarm settled
-  into 1 distinct opinion cluster(s) by the end of the run."
+  into 1 opinion cluster(s) -- 0.0% favorable, 0.0% opposed, 100.0%
+  neutral -- an outcome best described as "Consensus". The biggest mover
+  was agent #2 (-0.50 -> 0.02); the most steadfast, agent #28, moved only
+  +0.02."
 ```
+
+Run the negatively-loaded topic from the curl examples below
+(`"mandatory return to office is a burden and unfair surveillance"`,
+bias -0.60) and the same population instead lands on `verdict:
+"Consensus"` with `opposed: 100%` — the swarm still agrees, just in the
+other direction. That favorable/opposed split, not just the variance
+number, is what the demo UI's distribution bar is showing.
 
 Chart description (`chart.png`, 50 agents / 50 rounds run): agents start
 at round 0 scattered between roughly -0.65 and +0.9 around the neutral
@@ -185,9 +208,12 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Open `http://127.0.0.1:8000/` for the demo UI (a form: topic / agents /
-rounds -> summary + stats + chart, with a "view raw report JSON" toggle),
-or use the API directly — interactive docs at `http://127.0.0.1:8000/docs`.
+Open `http://127.0.0.1:8000/` for the demo UI — a hero with clickable
+example topics, a 4-step "how it works" walkthrough, the try-it form, and
+a results view with a plain-language verdict, a favorable/neutral/opposed
+distribution bar, per-cluster cards, the most-persuaded/most-steadfast
+agent, stat tiles, the trajectory chart, and a raw-JSON toggle — or use
+the API directly, with interactive docs at `http://127.0.0.1:8000/docs`.
 
 ### Example requests
 
@@ -236,11 +262,13 @@ capped at 200 each on this endpoint — see "Deployment" for why.
 pytest
 ```
 
-30 tests cover `agent.py` (the update formula and its edge cases),
+40 tests cover `agent.py` (the update formula and its edge cases),
 `environment.py` (graph construction and the synchronous-step
-invariant), `evaluate.py` (variance, convergence, and clustering against
-hand-built logs), `ratelimit.py` (the sliding-window counter), and
-`main.py` (the API end to end: the UI route, `/simulate` -> `/chart/{id}`,
+invariant), `evaluate.py` (variance, convergence, clustering,
+distribution, verdict, and swing agents against hand-built logs),
+`report.py` (chart bytes and the disk-writing wrapper), `ratelimit.py`
+(the sliding-window counter), and `main.py` (the API end to end: the UI
+route, `/simulate` -> inline chart + best-effort `/chart/{id}`,
 validation, and rate-limit behavior via `TestClient`).
 
 ## Deployment
@@ -359,8 +387,17 @@ concurrent workers.
   can't be explained by pointing at a formula.
 - *Evaluation / benchmarking* — the simulation isn't just run and plotted;
   it's scored against explicit, thresholded criteria (did it converge, by
-  when, into how many clusters), which is exactly the shape of an eval
-  harness for a more complex agent system: run, log, score, summarize.
+  when, into how many clusters, which way), which is exactly the shape of
+  an eval harness for a more complex agent system: run, log, score,
+  summarize.
+- *Turning raw numbers into a legible result* — the first pass reported
+  variance and a cluster count, which is correct but not a sentence a
+  person can act on. `distribution`, `clusters`, `verdict`, and
+  `swing_agents` in [evaluate.py](evaluate.py) are all *deterministic
+  reprocessing of the same data* (no new model, no LLM), reframed as
+  "which way did it lean, by how much, and who moved" — the difference
+  between an evaluation harness that produces numbers and one that
+  produces an answer someone would actually read.
 - *Taking a service from "runs on my machine" to publicly deployable* —
   the one CPU-heavy endpoint is rate-limited, parameter caps are set from
   measured worst-case latency (not guessed), errors are caught and logged
