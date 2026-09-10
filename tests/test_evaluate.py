@@ -1,7 +1,16 @@
 """Tests for evaluate.py -- variance, convergence, and clustering logic
 against small hand-constructed logs."""
 
-from evaluate import count_opinion_clusters, evaluate, find_convergence_round, variance_per_round
+from evaluate import (
+    classify_outcome,
+    cluster_breakdown,
+    count_opinion_clusters,
+    evaluate,
+    find_convergence_round,
+    opinion_distribution,
+    swing_agents,
+    variance_per_round,
+)
 
 
 def _make_log(rounds_scores: dict[int, list[float]]) -> list[dict]:
@@ -46,14 +55,74 @@ def test_count_opinion_clusters_two_clusters_when_split():
     assert count_opinion_clusters(scores, eps=0.15) == 2
 
 
+def test_opinion_distribution_buckets_by_the_shared_lean_threshold():
+    scores = [0.1, 0.12, 0.09, 0.11]  # all within +-0.15 of zero -> neutral
+    dist = opinion_distribution(scores)
+    assert dist["neutral"] == {"count": 4, "pct": 100.0}
+    assert dist["favorable"]["count"] == 0
+    assert dist["opposed"]["count"] == 0
+
+
+def test_opinion_distribution_splits_favorable_and_opposed():
+    scores = [0.9, 0.85, -0.9, -0.2]  # 2 favorable, 2 opposed
+    dist = opinion_distribution(scores)
+    assert dist["favorable"] == {"count": 2, "pct": 50.0}
+    assert dist["opposed"] == {"count": 2, "pct": 50.0}
+    assert dist["neutral"] == {"count": 0, "pct": 0.0}
+
+
+def test_cluster_breakdown_reports_size_mean_and_lean_per_cluster():
+    scores = [-0.9, -0.85, 0.9, 0.85]
+    clusters = cluster_breakdown(scores, eps=0.15)
+
+    assert len(clusters) == 2
+    assert {c["lean"] for c in clusters} == {"favorable", "opposed"}
+    for c in clusters:
+        assert c["size"] == 2
+        assert c["pct"] == 50.0
+
+
+def test_classify_outcome_labels_single_cluster_as_consensus():
+    clusters = cluster_breakdown([0.1, 0.12, 0.09, 0.11], eps=0.15)
+    assert classify_outcome(clusters) == "Consensus"
+
+
+def test_classify_outcome_labels_two_even_clusters_as_polarized():
+    clusters = cluster_breakdown([-0.9, -0.85, 0.9, 0.85], eps=0.15)
+    assert classify_outcome(clusters) == "Polarized"
+
+
+def test_classify_outcome_labels_dominant_plus_holdouts():
+    # 8 agents near 0.5 (one dominant cluster), 1 agent way off at -0.9.
+    scores = [0.5] * 8 + [-0.9]
+    clusters = cluster_breakdown(scores, eps=0.15)
+    assert classify_outcome(clusters) == "Majority with holdouts"
+
+
+def test_swing_agents_finds_biggest_mover_and_most_steadfast():
+    log = _make_log({0: [0.0, 0.5, -0.5], 3: [0.1, 0.9, -0.55]})
+    swing = swing_agents(log)
+
+    assert swing["most_persuaded"]["agent_id"] == 1  # 0.5 -> 0.9, moved 0.4
+    assert swing["most_persuaded"]["movement"] == 0.4
+    assert swing["most_steadfast"]["agent_id"] == 2  # -0.5 -> -0.55, moved -0.05
+
+
+def test_swing_agents_none_for_empty_log():
+    assert swing_agents([]) is None
+
+
 def test_evaluate_end_to_end_returns_expected_keys():
     log = _make_log({0: [0.0, 1.0], 1: [0.4, 0.6]})
     seed_info = {"keywords": ["remote", "work"], "bias": 0.2}
     metrics = evaluate("remote work", seed_info, log, threshold=0.01, cluster_eps=0.15)
 
     assert set(metrics) >= {
-        "variance_per_round", "convergence_round", "num_clusters",
+        "variance_per_round", "convergence_round", "num_clusters", "clusters",
+        "distribution", "verdict", "swing",
         "initial_variance", "final_variance", "threshold", "summary",
     }
     assert isinstance(metrics["summary"], str)
     assert "remote work" in metrics["summary"]
+    assert metrics["verdict"] in {"Consensus", "Polarized", "Majority with holdouts", "No data"}
+    assert len(metrics["clusters"]) == metrics["num_clusters"]
