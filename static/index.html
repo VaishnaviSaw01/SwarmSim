@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SwarmSim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
     color-scheme: light;
@@ -80,6 +83,15 @@
   a { color: inherit; }
   .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px; }
 
+  /* Display face for headings only -- data, labels, and body copy stay in
+     the system sans throughout. Falls back to the same system stack as
+     body text (via `sans-serif` at the end) if the Google Fonts request
+     is blocked/offline, so the page never breaks on it, just looks a
+     touch plainer. */
+  h1, h2.section-title, h3, .brand, .kicker {
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
   /* ---- nav ---- */
   nav.topnav {
     position: sticky; top: 0; z-index: 10;
@@ -87,18 +99,26 @@
     backdrop-filter: blur(6px);
     border-bottom: 1px solid var(--border);
   }
-  nav.topnav .wrap { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; }
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+  nav.topnav .wrap { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; text-decoration: none; }
   .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
-  .navlinks { display: flex; gap: 22px; font-size: 0.88rem; color: var(--muted); }
+  .navlinks { display: flex; gap: 26px; font-size: 0.88rem; color: var(--muted); }
   .navlinks a { text-decoration: none; }
   .navlinks a:hover { color: var(--text); }
 
   /* ---- hero ---- */
-  .hero { padding: 64px 0 40px; text-align: center; }
-  .hero h1 { font-size: clamp(1.9rem, 4vw, 2.7rem); margin: 0 0 14px; letter-spacing: -0.02em; }
-  .hero p.sub { color: var(--muted); font-size: 1.05rem; max-width: 620px; margin: 0 auto 26px; }
-  .hero-ctas { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .hero { padding: 108px 0 64px; text-align: center; }
+  .hero h1 {
+    font-size: clamp(2.4rem, 5.6vw, 3.8rem);
+    font-weight: 700;
+    line-height: 1.08;
+    margin: 0 0 22px;
+    letter-spacing: -0.035em;
+    background: linear-gradient(135deg, var(--text) 35%, var(--accent) 120%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p.sub { color: var(--muted); font-size: 1.1rem; max-width: 620px; margin: 0 auto 34px; }
+  .hero-ctas { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 30px; }
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
     border-radius: 8px; padding: 11px 20px; font-size: 0.95rem; font-weight: 600;
@@ -115,32 +135,37 @@
   }
   .chip:hover { color: var(--text); border-color: var(--muted-2); }
 
-  .caveat { color: var(--muted-2); font-size: 0.8rem; margin-top: 18px; }
+  .caveat { color: var(--muted-2); font-size: 0.8rem; margin-top: 26px; }
 
   /* ---- sections ---- */
-  section { padding: 36px 0; }
-  h2.section-title { font-size: 1.4rem; margin: 0 0 6px; letter-spacing: -0.01em; }
-  p.section-sub { color: var(--muted); margin: 0 0 26px; max-width: 640px; }
+  section { padding: 88px 0; border-top: 1px solid var(--border); }
+  section:first-of-type { border-top: none; }
+  .kicker {
+    display: block; font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.14em; color: var(--accent); margin: 0 0 12px;
+  }
+  h2.section-title { font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 700; margin: 0 0 12px; letter-spacing: -0.025em; }
+  p.section-sub { color: var(--muted); margin: 0 0 40px; max-width: 640px; font-size: 1rem; }
 
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 480px) { .steps { grid-template-columns: 1fr; } }
   .step-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    padding: 18px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px 20px;
   }
-  .step-card .n { font-size: 0.78rem; color: var(--muted-2); font-weight: 700; margin-bottom: 10px; }
-  .step-card h3 { font-size: 0.98rem; margin: 0 0 6px; }
-  .step-card p { font-size: 0.85rem; color: var(--muted); margin: 0; }
+  .step-card .n { font-size: 0.78rem; color: var(--muted-2); font-weight: 700; margin-bottom: 14px; }
+  .step-card h3 { font-size: 1.08rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .step-card p { font-size: 0.87rem; color: var(--muted); margin: 0; }
 
-  .uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   @media (max-width: 720px) { .uses { grid-template-columns: 1fr; } }
   .use-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 20px;
   }
-  .use-card .tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
-  .use-card h3 { font-size: 1rem; margin: 0 0 6px; }
-  .use-card p { font-size: 0.86rem; color: var(--muted); margin: 0; }
+  .use-card .tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; margin-bottom: 10px; }
+  .use-card h3 { font-size: 1.1rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .use-card p { font-size: 0.88rem; color: var(--muted); margin: 0; }
 
   /* ---- form panel ---- */
   .panel {
@@ -160,7 +185,7 @@
   #error { background: var(--error-bg); color: var(--error-text); border-radius: 8px; padding: 12px 14px; font-size: 0.88rem; margin-top: 12px; }
 
   /* ---- results ---- */
-  #results { display: none; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+  #results { display: none; margin-top: 40px; padding-top: 36px; border-top: 1px solid var(--border); }
   .verdict-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
   .verdict-badge {
     display: inline-flex; align-items: center; gap: 6px;
@@ -175,7 +200,8 @@
   .stat .label { font-size: 0.7rem; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.03em; }
   .stat .value { font-size: 1.2rem; font-weight: 600; margin-top: 2px; }
 
-  .block-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-2); font-weight: 700; margin: 0 0 10px; }
+  .block-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-2); font-weight: 700; margin: 32px 0 12px; }
+  .block-title.first { margin-top: 0; }
 
   /* distribution bar */
   .dist-bar { display: flex; gap: 2px; height: 22px; border-radius: 6px; overflow: hidden; margin-bottom: 10px; background: var(--panel); }
@@ -238,6 +264,7 @@
   </section>
 
   <section id="how">
+    <span class="kicker">The method</span>
     <h2 class="section-title">How it works</h2>
     <p class="section-sub">Four plain steps, each one a small Python module with no hidden model in it &mdash; see the <a href="https://github.com/VaishnaviSaw01/SwarmSim#the-interaction-rule" target="_blank" rel="noopener">README</a> for the exact formula.</p>
     <div class="steps">
@@ -265,6 +292,7 @@
   </section>
 
   <section id="uses">
+    <span class="kicker">Why it's here</span>
     <h2 class="section-title">What it's actually good for</h2>
     <p class="section-sub">A whiteboard-simple environment, not a forecasting product &mdash; these are the honest use cases.</p>
     <div class="uses">
@@ -287,6 +315,7 @@
   </section>
 
   <section id="try">
+    <span class="kicker">Live demo</span>
     <h2 class="section-title">Try it</h2>
     <p class="section-sub">Runs the full pipeline server-side, offline, in well under a second.</p>
 
@@ -320,7 +349,7 @@
       </div>
       <p id="summary"></p>
 
-      <p class="block-title">Final lean</p>
+      <p class="block-title first">Final lean</p>
       <div class="dist-bar" id="dist-bar"></div>
       <div class="dist-legend" id="dist-legend"></div>
 
@@ -485,7 +514,13 @@
     }
 
     document.getElementById("chart").src = data.chart_data_url;
-    document.getElementById("raw-json").textContent = JSON.stringify(data, null, 2);
+
+    // The chart's own <img> already shows it; dumping ~170KB of base64
+    // into the "raw JSON" debug view is unreadable and just bloats the
+    // page, so swap it for a placeholder there only (the real chart
+    // still renders from the untouched data.chart_data_url above).
+    const forDisplay = { ...data, chart_data_url: `<omitted, ${data.chart_data_url.length} chars -- see the chart above>` };
+    document.getElementById("raw-json").textContent = JSON.stringify(forDisplay, null, 2);
 
     resultsEl.style.display = "block";
   }
