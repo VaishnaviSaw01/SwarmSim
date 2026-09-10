@@ -248,6 +248,27 @@ The app is stateless aside from files under `output/` (chart PNGs +
 `report.json` per run), so it deploys as a single web process with no
 database.
 
+**Google Cloud Run (currently deployed here — see below for the live
+URL):** builds and runs this repo's `Dockerfile` as-is (it already binds
+`0.0.0.0` and reads the `$PORT` Cloud Run injects at runtime, so no
+Cloud-Run-specific changes were needed). Two ways to deploy:
+
+- *Console, no CLI needed:* Cloud Run -> Create Service -> "Continuously
+  deploy from a repository" -> connect this GitHub repo, branch `main` ->
+  Cloud Run detects the `Dockerfile` and builds with Cloud Build ->
+  every push to `main` triggers a rebuild automatically. Set the env vars
+  from the table below under "Variables & Secrets"; leave "Port" as
+  whatever Cloud Run auto-detects from the `Dockerfile` (it reads `$PORT`
+  itself, so this Just Works). Allow unauthenticated invocations so the
+  demo UI is publicly reachable.
+- *CLI:* `gcloud run deploy swarmsim --source . --region us-central1
+  --allow-unauthenticated` from the repo root (`.gcloudignore` keeps the
+  Cloud Build upload small).
+
+Cloud Run's always-free tier (2M requests/month, well beyond what a demo
+gets) means this costs $0 as long as usage stays under that quota, which
+a portfolio/interview demo will not come close to.
+
 **Render (this repo's `render.yaml`):** New + -> Blueprint -> point it at
 this repo. It builds with `pip install -r requirements.txt` and starts
 with `uvicorn main:app --host 0.0.0.0 --port $PORT`, on Render's native
@@ -255,9 +276,16 @@ Python runtime (no Docker build there). To do the same by hand in the
 Render dashboard instead of using the blueprint: New + -> Web Service,
 same build/start commands, health check path `/health`.
 
-**Anywhere else (Railway, Fly.io, a VPS):** this repo's `Dockerfile` —
+**Anywhere else (Railway, a VPS):** this repo's `Dockerfile` —
 `docker build -t swarmsim . && docker run -p 8000:8000 -e PORT=8000
 swarmsim`.
+
+> Hugging Face Spaces was considered but ruled out: as of 2026, HF
+> requires a paid PRO plan just to *create* a Docker or Gradio Space (the
+> free "CPU basic" hardware only became free-to-use, not free-to-unlock).
+> Its Static SDK stays free for anyone, but Static Spaces serve
+> pre-built files only — no Python process — so it can't run this app's
+> backend at all.
 
 **Environment variables** (all optional, sensible local defaults):
 

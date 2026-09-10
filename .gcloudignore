@@ -1,0 +1,8 @@
+# Used by `gcloud run deploy --source .` to decide what to upload for the
+# Cloud Build context. Reuses .gitignore's rules (__pycache__, output/,
+# .venv/, etc.) and additionally skips git's own metadata, which
+# .gitignore doesn't need to (and shouldn't) list.
+> .gitignore
+
+.git
+.github

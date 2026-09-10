@@ -2,9 +2,13 @@
 #
 # WHY this exists alongside render.yaml: render.yaml deploys SwarmSim on
 # Render's native Python runtime (no container build needed there). This
-# Dockerfile is for everywhere else -- Railway, Fly.io, a plain VPS, or a
-# local `docker run` -- anywhere that wants a self-contained image instead
-# of a platform-specific buildpack.
+# Dockerfile is for everywhere else that wants a container image directly
+# -- Google Cloud Run (`gcloud run deploy --source .` builds this exact
+# file), Railway, Fly.io, a plain VPS, or a local `docker run`. It needs
+# zero changes for Cloud Run specifically: the CMD already binds
+# 0.0.0.0 and reads $PORT, which Cloud Run injects into the container
+# at runtime (it does not use the ENV PORT=8000 default below except
+# for a plain local `docker run` with no -e PORT set).
 FROM python:3.11-slim
 
 WORKDIR /app
