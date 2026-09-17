@@ -99,24 +99,47 @@
     backdrop-filter: blur(6px);
     border-bottom: 1px solid var(--border);
   }
-  nav.topnav .wrap { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; text-decoration: none; }
+  nav.topnav .wrap { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; text-decoration: none; flex: none; }
   .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
-  .navlinks { display: flex; gap: 26px; font-size: 0.88rem; color: var(--muted); }
-  .navlinks a { text-decoration: none; }
-  .navlinks a:hover { color: var(--text); }
+  .navlinks { display: flex; align-items: center; gap: 24px; font-size: 0.88rem; color: var(--muted); }
+  .navlinks a.textlink { text-decoration: none; }
+  .navlinks a.textlink:hover { color: var(--text); }
+  .navbtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 13px; font-size: 0.85rem; font-weight: 600;
+    text-decoration: none; color: var(--text);
+    transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  }
+  .navbtn svg { width: 15px; height: 15px; flex: none; }
+  .navbtn:hover { border-color: var(--muted-2); transform: translateY(-1px); }
+  .navbtn.solid { background: var(--text); color: var(--page); border-color: var(--text); }
+  .navbtn.solid:hover { opacity: 0.88; }
 
   /* ---- hero ---- */
-  .hero { padding: 108px 0 64px; text-align: center; }
+  .hero { position: relative; padding: 116px 0 64px; text-align: center; overflow: hidden; }
+  .hero::before {
+    content: ""; position: absolute; left: 50%; top: -120px; width: 720px; height: 480px;
+    transform: translateX(-50%);
+    background: radial-gradient(closest-side, var(--accent-wash), transparent 70%);
+    opacity: 0.9; filter: blur(10px); z-index: -1; pointer-events: none;
+  }
   .hero h1 {
-    font-size: clamp(2.4rem, 5.6vw, 3.8rem);
+    font-size: clamp(2.6rem, 6.4vw, 4.4rem);
     font-weight: 700;
-    line-height: 1.08;
-    margin: 0 0 22px;
-    letter-spacing: -0.035em;
+    line-height: 1.05;
+    margin: 0 0 24px;
+    letter-spacing: -0.04em;
     background: linear-gradient(135deg, var(--text) 35%, var(--accent) 120%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
+  .hero h1 .swash { position: relative; display: inline-block; }
+  .hero h1 .swash svg {
+    position: absolute; left: 2%; right: 2%; bottom: -0.1em; width: 96%; height: 0.2em;
+    -webkit-text-fill-color: initial;
+  }
+  .hero h1 .swash svg path { stroke: var(--accent); }
   .hero p.sub { color: var(--muted); font-size: 1.1rem; max-width: 620px; margin: 0 auto 34px; }
   .hero-ctas { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 30px; }
   .btn {
@@ -125,15 +148,20 @@
     cursor: pointer; text-decoration: none; border: 1px solid transparent;
   }
   .btn-primary { background: var(--accent); color: var(--accent-ink); }
+  .btn-primary:hover { box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
   .btn-secondary { background: transparent; color: var(--text); border-color: var(--border); }
-  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn-secondary:hover { border-color: var(--muted-2); }
+  .btn { transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.6; cursor: default; transform: none; }
 
   .chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
   .chip {
     background: var(--chip-bg); border: 1px solid var(--border); color: var(--muted);
     border-radius: 999px; padding: 6px 14px; font-size: 0.82rem; cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
   }
-  .chip:hover { color: var(--text); border-color: var(--muted-2); }
+  .chip:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); }
 
   .caveat { color: var(--muted-2); font-size: 0.8rem; margin-top: 26px; }
 
@@ -147,14 +175,28 @@
   h2.section-title { font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 700; margin: 0 0 12px; letter-spacing: -0.025em; }
   p.section-sub { color: var(--muted); margin: 0 0 40px; max-width: 640px; font-size: 1rem; }
 
+  .icon-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--accent-wash); color: var(--accent); margin-bottom: 16px;
+  }
+  .icon-badge svg { width: 19px; height: 19px; }
+
   .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 480px) { .steps { grid-template-columns: 1fr; } }
   .step-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
     padding: 22px 20px;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   }
-  .step-card .n { font-size: 0.78rem; color: var(--muted-2); font-weight: 700; margin-bottom: 14px; }
+  .step-card:hover {
+    transform: translateY(-3px); border-color: var(--accent);
+    box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .step-card .top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .step-card .n { font-size: 0.74rem; color: var(--muted-2); font-weight: 700; margin: 0; }
+  .step-card .icon-badge { margin-bottom: 0; }
   .step-card h3 { font-size: 1.08rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
   .step-card p { font-size: 0.87rem; color: var(--muted); margin: 0; }
 
@@ -162,6 +204,11 @@
   @media (max-width: 720px) { .uses { grid-template-columns: 1fr; } }
   .use-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 20px;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .use-card:hover {
+    transform: translateY(-3px); border-color: var(--accent);
+    box-shadow: 0 10px 28px -14px color-mix(in srgb, var(--accent) 45%, transparent);
   }
   .use-card .tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; margin-bottom: 10px; }
   .use-card h3 { font-size: 1.1rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
@@ -213,7 +260,11 @@
 
   /* cluster + swing cards */
   .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 26px; }
-  .mini-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+  .mini-card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--panel);
+    transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+  .mini-card:hover { border-color: var(--accent); transform: translateY(-2px); }
   .mini-card .top-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .mini-card .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
   .mini-card .title { font-size: 0.85rem; font-weight: 600; }
@@ -237,17 +288,23 @@
   <div class="wrap">
     <a class="brand" href="#top"><span class="dot"></span>SwarmSim</a>
     <div class="navlinks">
-      <a href="#how">How it works</a>
-      <a href="#try">Try it</a>
-      <a href="/docs">API docs</a>
-      <a href="https://github.com/VaishnaviSaw01/SwarmSim" target="_blank" rel="noopener">GitHub</a>
+      <a class="textlink" href="#how">How it works</a>
+      <a class="textlink" href="#try">Try it</a>
+      <a class="navbtn" href="/docs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M20 5.5C20 4.7 19.3 4 18.5 4H12v16h6.5a1.5 1.5 0 0 0 1.5-1.5v-13Z"/></svg>
+        Docs
+      </a>
+      <a class="navbtn solid" href="https://github.com/VaishnaviSaw01/SwarmSim" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
     </div>
   </div>
 </nav>
 
 <div class="wrap" id="top">
   <section class="hero">
-    <h1>Watch a swarm change its mind.</h1>
+    <h1>Watch a swarm <span class="swash">change its mind<svg viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true"><path d="M2 12c40-10 90-10 130-2s130 8 166-6" fill="none" stroke-width="6" stroke-linecap="round"/></svg></span>.</h1>
     <p class="sub">SwarmSim seeds a population of simple agents from a topic string, drops them on a
       small-world social graph, and lets a plain weighted-average update rule run for N rounds &mdash;
       then reports whether, how fast, and which way the swarm settled.</p>
@@ -269,22 +326,34 @@
     <p class="section-sub">Four plain steps, each one a small Python module with no hidden model in it &mdash; see the <a href="https://github.com/VaishnaviSaw01/SwarmSim#the-interaction-rule" target="_blank" rel="noopener">README</a> for the exact formula.</p>
     <div class="steps">
       <div class="step-card">
-        <div class="n">01 &middot; seed.py</div>
+        <div class="top-row">
+          <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V10"/><path d="M12 10c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 14c0-3-2.5-5-6-5 0 3 2.5 5 6 5Z"/></svg></span>
+          <span class="n">01 &middot; seed.py</span>
+        </div>
         <h3>Seed</h3>
         <p>TF-IDF pulls the topic's top keywords; a small hardcoded word list scores them positive/negative into one bias number.</p>
       </div>
       <div class="step-card">
-        <div class="n">02 &middot; environment.py</div>
+        <div class="top-row">
+          <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.1"/><circle cx="19" cy="6" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="6" cy="19" r="2.1"/><circle cx="18" cy="18" r="2.1"/><path d="M6.9 7.3 10.2 10.5M17.1 7.3 13.8 10.5M13.6 13.8 16.5 16.6M10.4 13.8 7.5 17.6"/></svg></span>
+          <span class="n">02 &middot; environment.py</span>
+        </div>
         <h3>Environment</h3>
         <p>A small-world graph (networkx) seats every agent with local neighbors plus a few long-range shortcuts; opinions start scattered around the bias.</p>
       </div>
       <div class="step-card">
-        <div class="n">03 &middot; simulate.py</div>
+        <div class="top-row">
+          <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
+          <span class="n">03 &middot; simulate.py</span>
+        </div>
         <h3>Simulate</h3>
         <p>Each round, every agent's opinion becomes a stubbornness-weighted average of its neighbors' opinions, plus a little noise.</p>
       </div>
       <div class="step-card">
-        <div class="n">04 &middot; evaluate.py</div>
+        <div class="top-row">
+          <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V14M10 20V8M16 20v-5M20 20V4"/></svg></span>
+          <span class="n">04 &middot; evaluate.py</span>
+        </div>
         <h3>Evaluate</h3>
         <p>Variance, convergence round, opinion clusters, and a favorable/neutral/opposed split &mdash; scored, not eyeballed.</p>
       </div>
@@ -297,16 +366,19 @@
     <p class="section-sub">A whiteboard-simple environment, not a forecasting product &mdash; these are the honest use cases.</p>
     <div class="uses">
       <div class="use-card">
+        <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z"/></svg></span>
         <div class="tag">Message framing</div>
         <h3>Sandbox a framing before you send it</h3>
         <p>Run the same announcement worded two ways and compare the simulated lean &mdash; a cheap intuition check, not a survey replacement.</p>
       </div>
       <div class="use-card">
+        <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M20 5.5C20 4.7 19.3 4 18.5 4H12v16h6.5a1.5 1.5 0 0 0 1.5-1.5v-13Z"/></svg></span>
         <div class="tag">Teaching</div>
         <h3>Demonstrate opinion dynamics</h3>
         <p>Every rule is one line you can put on a whiteboard: graph topology, a weighted-average update, and threshold-based evaluation.</p>
       </div>
       <div class="use-card">
+        <span class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7 3 11l4 4M17 7l4 4-4 4M14 4 10 20"/></svg></span>
         <div class="tag">Extensibility</div>
         <h3>Swap in a smarter agent</h3>
         <p>The update rule is the only part that's "dumb." Replace it with an LLM-judged reaction and the graph, logging, and evaluation layers don't change.</p>
