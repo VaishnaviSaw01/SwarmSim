@@ -274,6 +274,38 @@
   #chart-wrap { background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 6px; }
   #chart { width: 100%; display: block; border-radius: 4px; }
 
+  /* ---- live swarm graph ---- */
+  .graph-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .graph-round { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted-2); font-size: 0.78rem; }
+  .graph-shell {
+    display: grid; grid-template-columns: 1fr 220px; gap: 12px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 12px; margin-bottom: 12px;
+  }
+  @media (max-width: 640px) { .graph-shell { grid-template-columns: 1fr; } }
+  .graph-canvas-wrap { position: relative; border-radius: 10px; overflow: hidden; background: var(--panel-2); }
+  #graph-canvas { display: block; width: 100%; height: 340px; cursor: default; }
+  .graph-info {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; font-size: 0.83rem; align-self: start;
+  }
+  .graph-info-title { font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 600; font-size: 0.95rem; margin-bottom: 10px; }
+  .graph-info-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; color: var(--muted); border-top: 1px solid var(--border); }
+  .graph-info-row:first-of-type { border-top: none; }
+  .graph-info-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .graph-info-empty { color: var(--muted-2); font-size: 0.82rem; }
+
+  .graph-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .graph-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); border-radius: 8px; padding: 7px 14px;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: border-color 0.15s ease;
+  }
+  .graph-btn:hover { border-color: var(--accent); }
+  #graph-scrub { flex: 1; min-width: 120px; accent-color: var(--accent); }
+  .graph-legend .dist-legend { margin: 0; gap: 14px; }
+  .graph-hint { margin: 0 0 4px; }
+
   details { margin-top: 16px; }
   summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); }
   pre#raw-json { background: var(--code-bg); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 0.78rem; margin-top: 10px; }
@@ -421,7 +453,26 @@
       </div>
       <p id="summary"></p>
 
-      <p class="block-title first">Final lean</p>
+      <p class="block-title first graph-title">
+        The swarm, live &mdash; click any agent
+        <span class="graph-round" id="graph-round"></span>
+      </p>
+      <div class="graph-shell">
+        <div class="graph-canvas-wrap">
+          <canvas id="graph-canvas"></canvas>
+        </div>
+        <div class="graph-info" id="graph-info" hidden></div>
+      </div>
+      <div class="graph-controls">
+        <button type="button" class="graph-btn" id="graph-replay">&#8635; Replay</button>
+        <input type="range" id="graph-scrub" min="0" value="0" step="1" />
+        <span class="graph-legend">
+          <span class="dist-legend"><span class="item"><span class="swatch" style="background:var(--favorable)"></span>Favorable</span><span class="item"><span class="swatch" style="background:var(--neutral-fill)"></span>Neutral</span><span class="item"><span class="swatch" style="background:var(--opposed)"></span>Opposed</span></span>
+        </span>
+      </div>
+      <p class="hint graph-hint">Node size = influence (how much this agent's opinion counts toward its neighbors' average) &middot; position = the actual small-world graph this run's agents lived on.</p>
+
+      <p class="block-title">Final lean</p>
       <div class="dist-bar" id="dist-bar"></div>
       <div class="dist-legend" id="dist-legend"></div>
 
@@ -465,6 +516,300 @@
     opposed: "var(--opposed)",
   };
   const LEAN_LABEL = { favorable: "Favorable", neutral: "Neutral", opposed: "Opposed" };
+  // Matches evaluate.py's LEAN_THRESHOLD -- the graph colors an agent
+  // exactly the way the server-side distribution/cluster metrics do, so
+  // "favorable" in the legend always means the same 0.15 boundary.
+  const LEAN_THRESHOLD = 0.15;
+  function leanOf(score) {
+    if (score > LEAN_THRESHOLD) return "favorable";
+    if (score < -LEAN_THRESHOLD) return "opposed";
+    return "neutral";
+  }
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
+  /**
+   * SwarmGraph -- renders the *actual* social graph a simulation run's
+   * agents lived on, as a hand-rolled force-directed layout on <canvas>.
+   *
+   * WHY hand-rolled instead of a graph library: the whole project's ethos
+   * is "nothing here is a black box" -- a force-directed layout is just
+   * two forces (nodes repel each other; connected nodes are pulled
+   * together like a spring) integrated over a few dozen frames, which is
+   * simple enough to read top to bottom, matching every other module in
+   * this codebase. No new dependency, no extra request.
+   *
+   * WHY this is real data, not decoration: every node is one agent from
+   * the run that just executed (its actual persona traits), every edge
+   * is an actual small-world-graph connection from environment.py, and
+   * the color animation steps through the actual round-by-round opinion
+   * timeline that produced the metrics above it. Clicking a node reads
+   * real numbers, not placeholders.
+   */
+  class SwarmGraph {
+    constructor(canvas, infoPanel, roundLabel, scrubInput) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext("2d");
+      this.infoPanel = infoPanel;
+      this.roundLabel = roundLabel;
+      this.scrubInput = scrubInput;
+      this.nodes = [];
+      this.edges = [];
+      this.timeline = [];
+      this.byId = new Map();
+      this.round = 0;
+      this.hoverId = null;
+      this.selectedId = null;
+      // A generation token, not a timer handle: requestAnimationFrame and
+      // setTimeout hand back incompatible id types (cancelTimeout can't
+      // cancel a rAF handle or vice versa), and load()/play() can each
+      // kick off their own async loop. Every async loop closes over the
+      // generation it was started with and checks it before doing
+      // anything, so a stale loop from a superseded load() or play() call
+      // just stops on its next tick instead of fighting the new one.
+      this._gen = 0;
+
+      canvas.addEventListener("mousemove", (e) => this._onMouseMove(e));
+      canvas.addEventListener("click", (e) => this._onClick(e));
+      canvas.addEventListener("mouseleave", () => {
+        this.hoverId = null;
+        canvas.style.cursor = "default";
+        this._render();
+      });
+    }
+
+    load(graph, timeline) {
+      const gen = ++this._gen; // supersede any settle/play loop still running from a prior load()
+      const dpr = window.devicePixelRatio || 1;
+      const w = this.canvas.clientWidth || 400;
+      const h = this.canvas.clientHeight || 340;
+      this.canvas.width = w * dpr;
+      this.canvas.height = h * dpr;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.w = w;
+      this.h = h;
+
+      this.nodes = graph.nodes.map((n) => ({
+        ...n,
+        x: this.w / 2 + (Math.random() - 0.5) * this.w * 0.6,
+        y: this.h / 2 + (Math.random() - 0.5) * this.h * 0.6,
+        vx: 0,
+        vy: 0,
+      }));
+      this.byId = new Map(this.nodes.map((n) => [n.id, n]));
+      this.edges = graph.edges;
+      this.timeline = timeline;
+      this.round = 0;
+      this.selectedId = null;
+      this.hoverId = null;
+      this.infoPanel.hidden = true;
+
+      this.scrubInput.max = String(timeline.length - 1);
+      this.scrubInput.value = "0";
+      this._updateRoundLabel();
+      this._settle(gen);
+    }
+
+    _settle(gen) {
+      // Animate the physics settling over ~1.3s (real force-directed
+      // layout, not a canned entrance) so the graph visibly assembles
+      // itself from the topology, then hand off to the round playback.
+      let frame = 0;
+      const totalFrames = 80;
+      const step = () => {
+        if (gen !== this._gen) return; // a newer load() has taken over
+        this._applyForces();
+        this._render();
+        frame++;
+        if (frame < totalFrames) {
+          requestAnimationFrame(step);
+        } else {
+          this.play();
+        }
+      };
+      step();
+    }
+
+    _applyForces() {
+      const nodes = this.nodes;
+      const n = Math.max(nodes.length, 1);
+      const k = Math.sqrt((this.w * this.h) / n) * 0.85;
+
+      for (const node of nodes) {
+        node.fx = (this.w / 2 - node.x) * 0.006;
+        node.fy = (this.h / 2 - node.y) * 0.006;
+      }
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          if (dist > k * 3) continue; // repulsion is short-range; skip far pairs for speed
+          const force = (k * k) / dist;
+          const ux = dx / dist, uy = dy / dist;
+          a.fx += ux * force; a.fy += uy * force;
+          b.fx -= ux * force; b.fy -= uy * force;
+        }
+      }
+      for (const [u, v] of this.edges) {
+        const a = this.byId.get(u), b = this.byId.get(v);
+        if (!a || !b) continue;
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        const force = (dist * dist) / (k * 8);
+        const ux = dx / dist, uy = dy / dist;
+        a.fx -= ux * force; a.fy -= uy * force;
+        b.fx += ux * force; b.fy += uy * force;
+      }
+      for (const node of nodes) {
+        node.vx = (node.vx + node.fx * 0.02) * 0.82;
+        node.vy = (node.vy + node.fy * 0.02) * 0.82;
+        node.x = Math.max(12, Math.min(this.w - 12, node.x + node.vx));
+        node.y = Math.max(12, Math.min(this.h - 12, node.y + node.vy));
+      }
+    }
+
+    play() {
+      // Always mint a fresh generation, whether called internally (from
+      // _settle, once physics finishes) or externally (the Replay
+      // button): either way this is a brand-new playback loop that must
+      // invalidate whatever loop -- settle or a previous play() -- was
+      // running before it.
+      const gen = ++this._gen;
+      let r = 0;
+      const tick = () => {
+        if (gen !== this._gen) return; // superseded by a new load() (or another play()) since this started
+        this.round = r;
+        this.scrubInput.value = String(r);
+        this._updateRoundLabel();
+        this._render();
+        r++;
+        if (r < this.timeline.length) {
+          setTimeout(tick, 130);
+        }
+      };
+      tick();
+    }
+
+    setRound(r) {
+      this._gen++; // stop any running settle/play loop; manual scrubbing takes over
+      this.round = Math.max(0, Math.min(this.timeline.length - 1, r));
+      this._updateRoundLabel();
+      this._render();
+    }
+
+    _updateRoundLabel() {
+      const last = Math.max(this.timeline.length - 1, 0);
+      this.roundLabel.textContent = `round ${this.round} / ${last}`;
+    }
+
+    _scoreAt(nodeId) {
+      const row = this.timeline[this.round];
+      return row ? row[nodeId] : 0;
+    }
+
+    _radius(node) {
+      return 4 + (node.influence ?? 0.3) * 7;
+    }
+
+    _colorFor(score) {
+      const lean = leanOf(score);
+      const varName = lean === "favorable" ? "--favorable" : lean === "opposed" ? "--opposed" : "--neutral-fill";
+      const fallback = lean === "favorable" ? "#2a78d6" : lean === "opposed" ? "#e34948" : "#c3c2b7";
+      return cssVar(varName, fallback);
+    }
+
+    _render() {
+      const ctx = this.ctx;
+      ctx.clearRect(0, 0, this.w, this.h);
+
+      ctx.strokeStyle = cssVar("--border", "#ccc");
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.4;
+      for (const [u, v] of this.edges) {
+        const a = this.byId.get(u), b = this.byId.get(v);
+        if (!a || !b) continue;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      for (const node of this.nodes) {
+        const score = this._scoreAt(node.id);
+        const isActive = node.id === this.hoverId || node.id === this.selectedId;
+        const r = this._radius(node) + (isActive ? 2 : 0);
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = this._colorFor(score);
+        ctx.fill();
+        if (node.id === this.selectedId) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = cssVar("--text", "#000");
+          ctx.stroke();
+        }
+      }
+    }
+
+    _nodeAt(x, y) {
+      for (let i = this.nodes.length - 1; i >= 0; i--) {
+        const node = this.nodes[i];
+        const r = this._radius(node) + 3;
+        if ((node.x - x) ** 2 + (node.y - y) ** 2 <= r * r) return node;
+      }
+      return null;
+    }
+
+    _onMouseMove(e) {
+      const rect = this.canvas.getBoundingClientRect();
+      const node = this._nodeAt(e.clientX - rect.left, e.clientY - rect.top);
+      const newHover = node ? node.id : null;
+      this.canvas.style.cursor = node ? "pointer" : "default";
+      if (newHover !== this.hoverId) {
+        this.hoverId = newHover;
+        this._render();
+      }
+    }
+
+    _onClick(e) {
+      const rect = this.canvas.getBoundingClientRect();
+      const node = this._nodeAt(e.clientX - rect.left, e.clientY - rect.top);
+      this.selectedId = node ? node.id : null;
+      this._render();
+      this._showInfo(node);
+    }
+
+    _showInfo(node) {
+      if (!node) {
+        this.infoPanel.hidden = true;
+        return;
+      }
+      const score = this._scoreAt(node.id);
+      const lean = leanOf(score);
+      const neighborCount = this.edges.filter(([u, v]) => u === node.id || v === node.id).length;
+      this.infoPanel.hidden = false;
+      this.infoPanel.innerHTML = `
+        <div class="graph-info-title">Agent #${node.id}</div>
+        <div class="graph-info-row"><span>Opinion</span><b>${score.toFixed(2)} &middot; ${LEAN_LABEL[lean]}</b></div>
+        <div class="graph-info-row"><span>Influence</span><b>${node.influence.toFixed(2)}</b></div>
+        <div class="graph-info-row"><span>Stubbornness</span><b>${node.stubbornness.toFixed(2)}</b></div>
+        <div class="graph-info-row"><span>Openness</span><b>${node.openness.toFixed(2)}</b></div>
+        <div class="graph-info-row"><span>Neighbors</span><b>${neighborCount}</b></div>
+      `;
+    }
+  }
+
+  const swarmGraph = new SwarmGraph(
+    document.getElementById("graph-canvas"),
+    document.getElementById("graph-info"),
+    document.getElementById("graph-round"),
+    document.getElementById("graph-scrub"),
+  );
+  document.getElementById("graph-replay").addEventListener("click", () => swarmGraph.play());
+  document.getElementById("graph-scrub").addEventListener("input", (e) => swarmGraph.setRound(Number(e.target.value)));
 
   document.querySelectorAll(".chip").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -587,14 +932,24 @@
 
     document.getElementById("chart").src = data.chart_data_url;
 
-    // The chart's own <img> already shows it; dumping ~170KB of base64
-    // into the "raw JSON" debug view is unreadable and just bloats the
-    // page, so swap it for a placeholder there only (the real chart
-    // still renders from the untouched data.chart_data_url above).
-    const forDisplay = { ...data, chart_data_url: `<omitted, ${data.chart_data_url.length} chars -- see the chart above>` };
+    // The chart's own <img> already shows it, and the graph above
+    // animates opinion_timeline directly; dumping ~170KB of base64 plus a
+    // full round-by-round array into the "raw JSON" debug view is
+    // unreadable and just bloats the page, so both get a placeholder
+    // there only -- the real data these came from is untouched above.
+    const forDisplay = {
+      ...data,
+      chart_data_url: `<omitted, ${data.chart_data_url.length} chars -- see the chart above>`,
+      opinion_timeline: `<omitted, ${data.opinion_timeline.length} rounds x ${data.opinion_timeline[0]?.length ?? 0} agents -- see the live graph above>`,
+    };
     document.getElementById("raw-json").textContent = JSON.stringify(forDisplay, null, 2);
 
     resultsEl.style.display = "block";
+
+    // Load the graph last, and after resultsEl is visible: the canvas
+    // needs a non-zero clientWidth/clientHeight to size itself, which it
+    // won't have while its container is display:none.
+    swarmGraph.load(data.graph, data.opinion_timeline);
   }
 </script>
 </body>
