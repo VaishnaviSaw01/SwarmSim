@@ -19,6 +19,25 @@ is a rule you can defend on a whiteboard, not the most accurate sentiment
 classifier. A small positive/negative lexicon is transparent, has zero
 external dependencies, and is enough to put a directional bias on the
 topic.
+
+WHY MOST TOPICS END UP "NEUTRAL" (bias exactly 0.0), AND WHY THAT'S A
+REAL LIMITATION, NOT A BUG: bias is computed only from the topic's top-5
+TF-IDF keywords, and only counts if one of those keywords is an *exact*
+match in POSITIVE_WORDS/NEGATIVE_WORDS. A topic like "quarterly
+performance review process" has zero matches -- "performance" and
+"review" are sentiment-neutral in isolation, even though the topic
+*could* carry sentiment in context ("performance review" often reads as
+stressful). This is the honest cost of a lexicon instead of a real
+sentiment model: it can only ever recognize words it was explicitly
+given, never context. When bias lands at 0.0, every agent seeds near 0,
+the DeGroot-weighted update rule then converges the whole population
+toward that same near-0 consensus (the rule doesn't manufacture
+sentiment from nothing), and since evaluate.py's neutral band is
++-0.15, a converged population sitting at ~0 reads as "mostly neutral"
+almost by construction. The fix that's actually in scope for this
+project's simplicity constraint is a bigger, more general lexicon (see
+below) -- there's no amount of tuning LEAN_THRESHOLD that fixes "we never
+saw a word we recognize" being fed to the model.
 """
 
 from __future__ import annotations
@@ -32,6 +51,19 @@ POSITIVE_WORDS = {
     "success", "successful", "better", "beneficial", "convenient",
     "convenience", "empower", "empowering", "opportunity", "balance",
     "wellbeing", "efficient", "efficiency", "modern", "progressive",
+    # Broader, domain-general positive adjectives/nouns -- added because
+    # the original ~30-word list was heavily workplace-flavored and
+    # missed most everyday topics entirely (see the "why is everything
+    # neutral" note below).
+    "excellent", "amazing", "wonderful", "outstanding", "innovative",
+    "innovation", "boost", "boosts", "boosted", "growth", "thrive",
+    "thriving", "safe", "safety", "secure", "security", "fair",
+    "fairness", "inclusive", "inclusion", "affordable", "sustainable",
+    "sustainability", "healthy", "helpful", "gain", "gains", "advance",
+    "advancement", "upgrade", "upgraded", "transparent", "transparency",
+    "collaborative", "collaboration", "respect", "respectful",
+    "reliable", "reliability", "streamline", "streamlined", "valuable",
+    "encouraging", "reward", "rewarding", "saving", "savings",
 }
 
 NEGATIVE_WORDS = {
@@ -41,6 +73,13 @@ NEGATIVE_WORDS = {
     "distrust", "surveillance", "micromanage", "micromanagement", "cut",
     "cuts", "cutting", "layoff", "layoffs", "backward", "outdated",
     "inconvenient", "inflexible", "controlling", "punitive", "loss",
+    # Same broadening as POSITIVE_WORDS above.
+    "harm", "harmful", "dangerous", "risky", "threat", "threatening",
+    "failure", "crisis", "declining", "worrying", "concerning",
+    "frustrating", "expensive", "costly", "wasteful", "chaotic", "toxic",
+    "hostile", "unsafe", "insecure", "unreliable", "broken", "disruptive",
+    "punishment", "excessive", "invasive", "exploitative", "unjust",
+    "injustice", "corrupt", "corruption", "greedy",
 }
 
 
