@@ -130,6 +130,20 @@ Every agent's opinion at round 0 is then `bias + N(0, 0.3)`, clipped to
 starting identical, since a zero-variance population at round 0 would
 leave nothing for the simulation to converge *from*.
 
+**Known limitation — most topics land exactly on `bias = 0.0`:** the
+lexicon only recognizes words it was explicitly given. "Quarterly
+performance review process" has no lexicon hits at all, so it seeds
+neutral and — since the update rule can't manufacture sentiment from
+nothing — converges to a consensus near 0, which then reads as "mostly
+neutral" under the ±0.15 threshold below. That's the correct, honest
+answer for a topic with no charged words in it; it becomes a real gap
+only for topics that *do* carry sentiment in context the lexicon doesn't
+happen to list verbatim. `seed.py`'s ~80-word-per-list lexicon (up from
+an original ~30, after checking against 8 realistic topics found only
+1/8 got a nonzero bias) narrows this, but a fixed word list can never
+close it completely — that would need an actual sentiment model, which
+is exactly the complexity this project deliberately opts out of.
+
 ## Evaluation metrics
 
 All computed in `evaluate.py` from the round-by-round log, no fitted
