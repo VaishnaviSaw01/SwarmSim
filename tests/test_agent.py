@@ -44,6 +44,32 @@ def test_update_opinion_result_stays_clipped():
     assert result == 1.0
 
 
+def test_update_opinion_weights_neighbors_by_influence():
+    a = Agent(agent_id=0, persona={"stubbornness": 0.0}, opinion_score=0.0)
+    # Neighbor 0 says 1.0 with weight 3 (high influence); neighbor 1 says
+    # -1.0 with weight 1 (low influence). Weighted mean = (1*3 + -1*1) / 4 = 0.5,
+    # not the plain mean of 0.0 -- this is exactly the case a plain
+    # average can't distinguish but a DeGroot-weighted one can.
+    result = a.update_opinion([1.0, -1.0], noise=0.0, round_num=1, neighbor_weights=[3.0, 1.0])
+    assert result == pytest.approx(0.5)
+
+
+def test_update_opinion_equal_weights_matches_plain_mean():
+    a = Agent(agent_id=0, persona={"stubbornness": 0.5}, opinion_score=0.2)
+    unweighted = Agent(agent_id=1, persona={"stubbornness": 0.5}, opinion_score=0.2)
+
+    weighted_result = a.update_opinion([0.6, 1.0], noise=0.0, round_num=1, neighbor_weights=[1.0, 1.0])
+    plain_result = unweighted.update_opinion([0.6, 1.0], noise=0.0, round_num=1)
+
+    assert weighted_result == pytest.approx(plain_result)
+
+
+def test_update_opinion_zero_total_weight_falls_back_to_plain_mean():
+    a = Agent(agent_id=0, persona={"stubbornness": 0.0}, opinion_score=0.0)
+    result = a.update_opinion([1.0, -1.0], noise=0.0, round_num=1, neighbor_weights=[0.0, 0.0])
+    assert result == pytest.approx(0.0)  # plain mean of [1.0, -1.0]
+
+
 def test_memory_caps_at_five_entries():
     a = Agent(agent_id=0, persona={"stubbornness": 0.5})
     for r in range(10):

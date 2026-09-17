@@ -73,13 +73,21 @@ class Environment:
     def _random_persona(self) -> dict[str, float]:
         """Draw a random persona for a new agent.
 
-        Two traits, each uniform in [0, 1], is deliberately minimal: enough
-        for agents to behave differently from one another (see
-        Agent.update_opinion) without needing a persona *model*.
+        Three traits, each uniform over a fixed range, is deliberately
+        minimal: enough for agents to behave differently from one another
+        (see Agent.update_opinion) without needing a persona *model*.
+        "influence" is drawn from a wide range (0.05-1.0) on purpose --
+        most agents end up modestly influential, but a few land near 1.0,
+        giving the population a small number of genuinely high-influence
+        agents rather than everyone being roughly equal. That's what makes
+        the DeGroot-weighted average in Agent.update_opinion actually
+        matter; if every agent's influence were nearly identical, the
+        weighted mean would collapse to the old plain mean.
         """
         return {
             "stubbornness": float(self.rng.uniform(0.1, 0.9)),
             "openness": float(self.rng.uniform(0.1, 1.0)),
+            "influence": float(self.rng.uniform(0.05, 1.0)),
         }
 
     def seed_opinions(self, bias: float, sigma: float = 0.3) -> None:
@@ -123,12 +131,37 @@ class Environment:
         for aid, agent in self.agents.items():
             neighbor_ids = list(self.graph.neighbors(aid))
             neighbor_scores = [snapshot[n] for n in neighbor_ids]
+            # Each neighbor's own "influence" trait becomes its weight in
+            # this agent's average -- a loud, high-influence neighbor pulls
+            # harder than a low-influence one. See Agent.update_opinion for
+            # the DeGroot-style weighted-mean rule this feeds.
+            neighbor_weights = [self.agents[n].persona.get("influence", 1.0) for n in neighbor_ids]
             openness = agent.persona.get("openness", 0.5)
             noise = float(self.rng.normal(0, noise_std * openness))
-            new_scores[aid] = agent.update_opinion(neighbor_scores, noise, round_num)
+            new_scores[aid] = agent.update_opinion(neighbor_scores, noise, round_num, neighbor_weights)
 
         return new_scores
 
     def opinion_scores(self) -> dict[int, float]:
         """Current opinion_score of every agent, keyed by agent_id."""
         return {aid: agent.opinion_score for aid, agent in self.agents.items()}
+
+    def graph_data(self) -> dict:
+        """Export the graph topology + personas for visualization/reporting.
+
+        WHY this exists: the social graph is a first-class part of the
+        environment (see the module docstring), not an implementation
+        detail that only step() needs -- a caller rendering or explaining
+        a run should be able to see the actual structure the swarm lived
+        on, not just the opinion numbers it produced.
+
+        Returns:
+            {"nodes": [{"id", "stubbornness", "openness", "influence"}, ...],
+             "edges": [[u, v], ...]} -- plain JSON-serializable types.
+        """
+        nodes = [
+            {"id": aid, **agent.persona}
+            for aid, agent in sorted(self.agents.items())
+        ]
+        edges = [[int(u), int(v)] for u, v in self.graph.edges()]
+        return {"nodes": nodes, "edges": edges}

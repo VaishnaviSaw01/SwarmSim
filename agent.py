@@ -25,15 +25,19 @@ class Agent:
     Attributes:
         agent_id: unique identifier, also the node id in the social graph.
         persona: a small dict of traits in [0, 1] that shape how the agent
-            reacts to its neighbors. Kept to 2-3 traits on purpose -- enough
-            to make agents heterogeneous without turning the update rule
-            into something you can no longer derive by hand:
+            reacts to its neighbors. Kept to three traits on purpose --
+            enough to make agents heterogeneous without turning the update
+            rule into something you can no longer derive by hand:
                 - "stubbornness": how much weight the agent puts on its own
                   current opinion vs. its neighbors' average (see
                   `update_opinion`).
                 - "openness": scales how much random noise the agent's
                   opinion picks up each round (a proxy for "how easily
                   swayed by things outside the model").
+                - "influence": how much this agent's opinion counts in its
+                  *neighbors'* averages (see `update_opinion`'s
+                  neighbor_weights). A low-influence agent can shout into
+                  the graph all it wants; it just won't move anyone.
         opinion_score: the agent's current opinion, constrained to [-1, 1]
             (-1 = fully against, +1 = fully in favor, 0 = neutral).
         memory: the agent's last 5 interactions, each a small dict recording
@@ -57,6 +61,7 @@ class Agent:
         neighbor_scores: list[float],
         noise: float,
         round_num: int,
+        neighbor_weights: list[float] | None = None,
     ) -> float:
         """Update this agent's opinion given its neighbors' current scores.
 
@@ -66,13 +71,27 @@ class Agent:
         is more valuable here than a rule that "performs better" but is
         opaque. The formula is:
 
-            new_opinion = w * old_opinion + (1 - w) * mean(neighbor_scores) + noise
+            new_opinion = w * old_opinion + (1 - w) * weighted_mean(neighbor_scores, neighbor_weights) + noise
 
         where `w` is this agent's "stubbornness" trait (0 = fully swayed by
         neighbors, 1 = completely ignores them) and `noise` is a single
         Gaussian draw, pre-scaled by the caller using the agent's
         "openness" trait so that more "open" agents pick up more
         randomness per round.
+
+        WHY weight neighbors at all, instead of a plain mean: treating
+        every neighbor as equally persuasive is the one part of the
+        original rule that doesn't match how influence actually works --
+        some people just carry more weight in a conversation than others.
+        `neighbor_weights` (each neighbor's own "influence" trait) fixes
+        that with the smallest possible change: it's still one line of
+        arithmetic, just a *weighted* mean instead of a plain one. This is
+        the classic DeGroot learning model's update rule (DeGroot, 1974,
+        "Reaching a Consensus"): each agent's next belief is a
+        trust-weighted average of its neighbors' current beliefs. Passing
+        `neighbor_weights=None` (or all-equal weights) recovers the
+        original plain-mean rule exactly, so this is a strict
+        generalization, not a different model bolted on.
 
         If the agent has no neighbors (an isolated node), there is nothing
         to average against, so it keeps its own score and only absorbs the
@@ -87,17 +106,29 @@ class Agent:
                 round (drawn by the caller so the RNG stream stays
                 centrally controlled and reproducible).
             round_num: the current round index, recorded into memory.
+            neighbor_weights: each neighbor's influence weight, same order
+                and length as neighbor_scores. Weights are normalized
+                internally, so callers can pass raw influence traits
+                (they don't need to sum to 1). None (the default) falls
+                back to an unweighted mean -- every neighbor counts the
+                same, matching the original rule.
 
         Returns:
             The agent's new opinion_score (also stored on the instance).
         """
-        w = self.persona.get("stubbornness", 0.5)
-        neighbor_avg = (
-            sum(neighbor_scores) / len(neighbor_scores)
-            if neighbor_scores
-            else self.opinion_score
-        )
+        if not neighbor_scores:
+            neighbor_avg = self.opinion_score
+        elif neighbor_weights is None:
+            neighbor_avg = sum(neighbor_scores) / len(neighbor_scores)
+        else:
+            total_weight = sum(neighbor_weights)
+            neighbor_avg = (
+                sum(s * w for s, w in zip(neighbor_scores, neighbor_weights)) / total_weight
+                if total_weight > 0
+                else sum(neighbor_scores) / len(neighbor_scores)
+            )
 
+        w = self.persona.get("stubbornness", 0.5)
         new_score = _clip(w * self.opinion_score + (1 - w) * neighbor_avg + noise)
 
         self.memory.append(
