@@ -36,14 +36,16 @@ environment.py     watts_strogatz small-world graph + Agent per node,
 simulate.py        round loop: environment.step() each round,
      |              logs every agent's opinion_score every round
      v
-evaluate.py        variance per round, convergence round,
-     |              opinion-cluster count, text summary
+evaluate.py        variance, convergence round, cluster/distribution/
+     |              verdict, swing + most-influential agent, summary
      v
  report.py         matplotlib PNG chart + JSON report to disk
      |
      v
-  main.py          FastAPI POST /simulate ties it all together,
-                    serves static/index.html as the demo UI
+  main.py          FastAPI POST /simulate ties it all together --
+                    returns metrics + the real graph (nodes, edges,
+                    personas) + a round-by-round opinion timeline
+                    for static/index.html's live graph visualization
 ```
 
 Each module owns exactly one responsibility, and none of them know about
@@ -67,23 +69,36 @@ That separation is what makes each piece independently testable (see
 ## The interaction rule
 
 Every agent updates once per round as a **stubbornness-weighted average of
-its graph neighbors' current opinions, plus Gaussian noise**:
+its graph neighbors' current opinions — each neighbor weighted by its own
+influence — plus Gaussian noise**:
 
 ```
-new_opinion = w * old_opinion + (1 - w) * mean(neighbor_opinions) + noise
+new_opinion = w * old_opinion + (1 - w) * weighted_mean(neighbor_opinions, neighbor_influence) + noise
 ```
 
 - `w` = the agent's `stubbornness` trait, in `[0.1, 0.9]`. `w = 1` would
   mean the agent never changes; `w = 0` means it fully adopts its
-  neighbors' average every round.
-- `mean(neighbor_opinions)` = the average `opinion_score` of the agent's
-  direct neighbors in the social graph, from the round *before* this
-  update (see "why synchronous updates" below).
+  neighbors' (weighted) average every round.
+- `weighted_mean(neighbor_opinions, neighbor_influence)` = each neighbor's
+  `opinion_score` weighted by that neighbor's own `influence` trait
+  (`[0.05, 1.0]`, drawn from a wide range on purpose so a handful of
+  agents land near 1.0 and actually stand out), from the round *before*
+  this update (see "why synchronous updates" below). This is the classic
+  **DeGroot learning model**'s update rule (DeGroot, 1974, "Reaching a
+  Consensus") — treating every neighbor as equally persuasive was the one
+  part of the original plain-mean rule that didn't match how influence
+  actually works; passing equal weights recovers that plain mean exactly,
+  so this is a strict generalization, not a different model.
 - `noise ~ N(0, noise_std * openness)` — a single Gaussian draw per agent
   per round. `noise_std` is a global run parameter (default `0.05`);
   `openness` is a per-agent trait in `[0.1, 1.0]` that scales it, so more
   "open" agents pick up more randomness.
 - The result is clipped to `[-1, 1]`.
+
+Three persona traits per agent, then — `stubbornness`, `openness`,
+`influence` — each a plain uniform draw, no persona *model*. Enough for
+agents to behave differently without turning the update rule into
+something you can no longer derive by hand.
 
 **Why synchronous, not sequential, updates:** every agent's update for
 round `r` uses a *snapshot* of all opinions from round `r-1`, taken before
@@ -148,6 +163,12 @@ constant:
 - **Swing agents** — `swing_agents()` finds the single agent that moved
   most from round 0 to the final round, and the one that moved least: a
   concrete, checkable detail alongside the aggregate numbers.
+- **Most influential agent** — `most_influential_agent()` reports the
+  agent with the highest `influence` trait (see "The interaction rule"
+  above) — the one whose opinion carries the most weight in its
+  neighbors' updates. Requires the run's graph data (`graph_nodes`); the
+  API and demo UI always supply it, but `evaluate()` works without it too
+  (the field is just `None`).
 - **Text summary** — a formatted string built directly from the numbers
   above (not generated text) so it's always consistent with the report.
 
@@ -163,24 +184,26 @@ seed:
   bias: 0.00   (none of these keywords are in the sentiment lexicon -> neutral prior)
 
 metrics:
-  initial_variance (round 0):  0.0443
-  final_variance   (round 30): 0.0016
-  convergence_round: 3
+  initial_variance (round 0):  0.0553
+  final_variance   (round 30): 0.0040
+  convergence_round: 6
   verdict: "Consensus"
-  distribution: favorable 0.0% (0), neutral 100.0% (30), opposed 0.0% (0)
-  clusters: [{size: 30, pct: 100.0, mean_score: -0.066, lean: "neutral"}]
+  distribution: favorable 0.0% (0), neutral 83.3% (25), opposed 16.7% (5)
+  clusters: [{size: 30, pct: 100.0, mean_score: -0.094, lean: "neutral"}]
   swing:
-    most_persuaded: agent #2,  -0.50 -> 0.02  (moved +0.53)
-    most_steadfast: agent #28, -0.14 -> -0.12 (moved +0.02)
+    most_persuaded: agent #13, 0.39 -> -0.02  (moved -0.41)
+    most_steadfast: agent #19, -0.10 -> -0.11 (moved -0.01)
+  most_influential: agent #1 (influence 0.98)
 
 summary: "Topic 'new company policy on remote work' started from a
   neutral keyword bias of 0.00 (keywords: company, new, policy, remote,
-  work). Opinion variance moved from 0.044 at round 0 to 0.002 at the
-  final round, converging (variance < 0.01) at round 3. The swarm settled
-  into 1 opinion cluster(s) -- 0.0% favorable, 0.0% opposed, 100.0%
+  work). Opinion variance moved from 0.055 at round 0 to 0.004 at the
+  final round, converging (variance < 0.01) at round 6. The swarm settled
+  into 1 opinion cluster(s) -- 0.0% favorable, 16.7% opposed, 83.3%
   neutral -- an outcome best described as "Consensus". The biggest mover
-  was agent #2 (-0.50 -> 0.02); the most steadfast, agent #28, moved only
-  +0.02."
+  was agent #13 (0.39 -> -0.02); the most steadfast, agent #19, moved
+  only -0.01. Agent #1 carried the most weight in its neighbors' updates
+  (influence 0.98)."
 ```
 
 Run the negatively-loaded topic from the curl examples below
@@ -188,7 +211,8 @@ Run the negatively-loaded topic from the curl examples below
 bias -0.60) and the same population instead lands on `verdict:
 "Consensus"` with `opposed: 100%` — the swarm still agrees, just in the
 other direction. That favorable/opposed split, not just the variance
-number, is what the demo UI's distribution bar is showing.
+number, is what the demo UI's distribution bar (and the live graph's
+node colors) are showing.
 
 Chart description (`chart.png`, 50 agents / 50 rounds run): agents start
 at round 0 scattered between roughly -0.65 and +0.9 around the neutral
@@ -198,7 +222,7 @@ with the small residual spread coming entirely from the per-round Gaussian
 noise term rather than genuine disagreement — matching `num_clusters: 1`.
 
 Full pipeline (seed → environment → simulate → evaluate → chart + JSON
-report) for **50 agents / 50 rounds measured on this machine: 0.24s** —
+report) for **50 agents / 50 rounds measured on this machine: 0.16s** —
 well inside the 5-second budget.
 
 ## Running it
@@ -210,10 +234,17 @@ uvicorn main:app --reload
 
 Open `http://127.0.0.1:8000/` for the demo UI — a hero with clickable
 example topics, a 4-step "how it works" walkthrough, the try-it form, and
-a results view with a plain-language verdict, a favorable/neutral/opposed
-distribution bar, per-cluster cards, the most-persuaded/most-steadfast
-agent, stat tiles, the trajectory chart, and a raw-JSON toggle — or use
-the API directly, with interactive docs at `http://127.0.0.1:8000/docs`.
+a results view built around **a live, interactive graph of the actual
+agents from that run**: a hand-rolled force-directed layout (canvas, no
+graph library) on the real small-world topology, node size showing each
+agent's real `influence` trait, colors animating through the real
+round-by-round opinion timeline as consensus (or polarization) forms, and
+a click-to-inspect panel with that agent's real persona and opinion.
+Below it: the plain-language verdict, favorable/neutral/opposed
+distribution bar, per-cluster cards, the most-persuaded/most-steadfast/
+most-influential agents, stat tiles, the trajectory chart, and a raw-JSON
+toggle. Or use the API directly, with interactive docs at
+`http://127.0.0.1:8000/docs`.
 
 ### Example requests
 
@@ -262,13 +293,15 @@ capped at 200 each on this endpoint — see "Deployment" for why.
 pytest
 ```
 
-40 tests cover `agent.py` (the update formula and its edge cases),
-`environment.py` (graph construction and the synchronous-step
-invariant), `evaluate.py` (variance, convergence, clustering,
-distribution, verdict, and swing agents against hand-built logs),
-`report.py` (chart bytes and the disk-writing wrapper), `ratelimit.py`
-(the sliding-window counter), and `main.py` (the API end to end: the UI
-route, `/simulate` -> inline chart + best-effort `/chart/{id}`,
+50 tests cover `agent.py` (the update formula, including the
+DeGroot-weighted average, and its edge cases), `environment.py` (graph
+construction, `graph_data()`, and the synchronous-step and
+influence-weighting invariants), `evaluate.py` (variance, convergence,
+clustering, distribution, verdict, swing agents, and most-influential
+against hand-built logs), `report.py` (chart bytes and the disk-writing
+wrapper), `ratelimit.py` (the sliding-window counter), and `main.py`
+(the API end to end: the UI route, `/simulate` -> inline chart +
+best-effort `/chart/{id}` + graph/opinion_timeline shape,
 validation, and rate-limit behavior via `TestClient`).
 
 ## Deployment
@@ -398,6 +431,20 @@ concurrent workers.
   "which way did it lean, by how much, and who moved" — the difference
   between an evaluation harness that produces numbers and one that
   produces an answer someone would actually read.
+- *Grounding the toy model in real literature* — swapping the plain
+  neighbor-mean for a trust-weighted one isn't a made-up tweak; it's the
+  DeGroot (1974) learning model, a standard citation in opinion-dynamics
+  research. Being able to name what a simplification *is* a
+  simplification *of* is usually more convincing in an interview than
+  the simplification itself.
+- *Visualizing the actual model, not a mock of it* — the demo UI's live
+  graph is a hand-rolled force-directed layout (canvas, no D3/graph
+  library) rendering the *real* small-world topology, sized by each
+  agent's *real* influence trait, colored by the *real* round-by-round
+  opinion timeline the request just computed. It's the same instinct as
+  the evaluation work above: don't just compute the right numbers, make
+  them something a person can actually look at and understand in five
+  seconds.
 - *Taking a service from "runs on my machine" to publicly deployable* —
   the one CPU-heavy endpoint is rate-limited, parameter caps are set from
   measured worst-case latency (not guessed), errors are caught and logged
