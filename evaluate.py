@@ -238,6 +238,29 @@ def swing_agents(log: list[dict]) -> dict | None:
     }
 
 
+def most_influential_agent(graph_nodes: list[dict] | None) -> dict | None:
+    """Which agent carries the most weight in its neighbors' updates.
+
+    WHY: since Agent.update_opinion started weighting neighbors by their
+    "influence" trait (a DeGroot-style weighted mean -- see agent.py), the
+    population isn't just "N interchangeable agents" anymore; a handful
+    of them are structurally more persuasive. This surfaces that agent by
+    name instead of leaving it buried in per-node persona data.
+
+    Args:
+        graph_nodes: the "nodes" list from Environment.graph_data(), or
+            None if graph data wasn't supplied to evaluate().
+
+    Returns:
+        {"agent_id", "influence"} for the highest-influence node, or None
+        if no graph data was given.
+    """
+    if not graph_nodes:
+        return None
+    top = max(graph_nodes, key=lambda n: n["influence"])
+    return {"agent_id": top["id"], "influence": top["influence"]}
+
+
 def summarize(topic: str, seed_info: dict, metrics: dict) -> str:
     """Build a short human-readable summary of the run's outcome.
 
@@ -264,6 +287,14 @@ def summarize(topic: str, seed_info: dict, metrics: dict) -> str:
             f"only {ms['movement']:+.2f}."
         )
 
+    influence_sentence = ""
+    influential = metrics.get("most_influential")
+    if influential:
+        influence_sentence = (
+            f" Agent #{influential['agent_id']} carried the most weight in its "
+            f"neighbors' updates (influence {influential['influence']:.2f})."
+        )
+
     return (
         f"Topic '{topic}' started from a {bias_word} keyword bias of "
         f"{seed_info['bias']:.2f} (keywords: {', '.join(seed_info['keywords']) or 'none'}). "
@@ -273,7 +304,7 @@ def summarize(topic: str, seed_info: dict, metrics: dict) -> str:
         f"{metrics['num_clusters']} opinion cluster(s) -- {dist['favorable']['pct']}% "
         f"favorable, {dist['opposed']['pct']}% opposed, {dist['neutral']['pct']}% "
         f"neutral -- an outcome best described as \"{metrics['verdict']}\"."
-        f"{swing_sentence}"
+        f"{swing_sentence}{influence_sentence}"
     )
 
 
@@ -283,6 +314,7 @@ def evaluate(
     log: list[dict],
     threshold: float = 0.01,
     cluster_eps: float = 0.15,
+    graph_nodes: list[dict] | None = None,
 ) -> dict:
     """Compute the full evaluation report for one simulation run.
 
@@ -292,14 +324,19 @@ def evaluate(
         log: the round-by-round log from simulate.run_simulation.
         threshold: variance threshold used for convergence detection.
         cluster_eps: opinion-distance threshold used for cluster counting.
+        graph_nodes: optional "nodes" list from Environment.graph_data(),
+            used only to compute most_influential. Omitting it (the
+            default) just leaves that field None -- evaluate() stays
+            usable from a bare log with no Environment in hand.
 
     Returns:
         A dict with variance_per_round, convergence_round, num_clusters,
         clusters (per-cluster detail), distribution (favorable/opposed/
         neutral split), verdict (plain-language outcome label), swing
-        (most-moved / least-moved agent), initial_variance,
-        final_variance, threshold, and a text summary -- this is exactly
-        what report.py writes out as JSON and what main.py returns.
+        (most-moved / least-moved agent), most_influential (highest-
+        influence agent), initial_variance, final_variance, threshold,
+        and a text summary -- this is exactly what report.py writes out
+        as JSON and what main.py returns.
     """
     variances = variance_per_round(log)
     conv_round = find_convergence_round(variances, threshold=threshold)
@@ -316,6 +353,7 @@ def evaluate(
         "clusters": clusters,
         "distribution": opinion_distribution(final_scores),
         "verdict": classify_outcome(clusters),
+        "most_influential": most_influential_agent(graph_nodes),
         "swing": swing_agents(log),
         "initial_variance": variances[0],
         "final_variance": variances[last_round],

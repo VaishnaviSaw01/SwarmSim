@@ -52,6 +52,26 @@ def test_simulate_returns_report_and_inline_chart():
     assert data["chart_data_url"].startswith("data:image/png;base64,")
     base64.b64decode(data["chart_data_url"].split(",", 1)[1])  # raises if malformed
 
+
+def test_simulate_returns_graph_and_opinion_timeline_for_visualization():
+    resp = client.post(
+        "/simulate",
+        json={"topic": "remote work policy", "num_agents": 8, "num_rounds": 5},
+    )
+    data = resp.json()
+
+    graph = data["graph"]
+    assert len(graph["nodes"]) == 8
+    assert all({"id", "stubbornness", "openness", "influence"} <= set(n) for n in graph["nodes"])
+    assert all(len(e) == 2 for e in graph["edges"])
+
+    timeline = data["opinion_timeline"]
+    assert len(timeline) == 6  # rounds 0..5 inclusive
+    assert all(len(round_scores) == 8 for round_scores in timeline)
+
+    assert data["metrics"]["most_influential"] is not None
+    assert data["metrics"]["most_influential"]["agent_id"] in range(8)
+
     # chart_url is best-effort (see get_chart's docstring) but should work
     # in this same-process test environment.
     assert data["chart_url"] == f"/chart/{data['run_id']}"

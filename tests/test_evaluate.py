@@ -7,6 +7,7 @@ from evaluate import (
     count_opinion_clusters,
     evaluate,
     find_convergence_round,
+    most_influential_agent,
     opinion_distribution,
     swing_agents,
     variance_per_round,
@@ -112,17 +113,40 @@ def test_swing_agents_none_for_empty_log():
     assert swing_agents([]) is None
 
 
+def test_most_influential_agent_picks_the_highest_influence_node():
+    nodes = [
+        {"id": 0, "influence": 0.3},
+        {"id": 1, "influence": 0.9},
+        {"id": 2, "influence": 0.5},
+    ]
+    assert most_influential_agent(nodes) == {"agent_id": 1, "influence": 0.9}
+
+
+def test_most_influential_agent_none_without_graph_data():
+    assert most_influential_agent(None) is None
+    assert most_influential_agent([]) is None
+
+
 def test_evaluate_end_to_end_returns_expected_keys():
     log = _make_log({0: [0.0, 1.0], 1: [0.4, 0.6]})
     seed_info = {"keywords": ["remote", "work"], "bias": 0.2}
-    metrics = evaluate("remote work", seed_info, log, threshold=0.01, cluster_eps=0.15)
+    graph_nodes = [{"id": 0, "influence": 0.4}, {"id": 1, "influence": 0.8}]
+    metrics = evaluate("remote work", seed_info, log, threshold=0.01, cluster_eps=0.15, graph_nodes=graph_nodes)
 
     assert set(metrics) >= {
         "variance_per_round", "convergence_round", "num_clusters", "clusters",
-        "distribution", "verdict", "swing",
+        "distribution", "verdict", "swing", "most_influential",
         "initial_variance", "final_variance", "threshold", "summary",
     }
     assert isinstance(metrics["summary"], str)
     assert "remote work" in metrics["summary"]
     assert metrics["verdict"] in {"Consensus", "Polarized", "Majority with holdouts", "No data"}
     assert len(metrics["clusters"]) == metrics["num_clusters"]
+    assert metrics["most_influential"] == {"agent_id": 1, "influence": 0.8}
+
+
+def test_evaluate_without_graph_nodes_leaves_most_influential_none():
+    log = _make_log({0: [0.0, 1.0]})
+    seed_info = {"keywords": [], "bias": 0.0}
+    metrics = evaluate("x", seed_info, log)
+    assert metrics["most_influential"] is None

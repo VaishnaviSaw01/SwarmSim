@@ -85,6 +85,25 @@ _simulate_limiter = RateLimiter(max_requests=RATE_LIMIT_MAX, window_seconds=RATE
 _RUN_ID_RE = re.compile(r"^[0-9]{1,20}$")  # run_ids are millisecond epoch timestamps
 
 
+def _opinion_timeline(log: list[dict], num_agents: int) -> list[list[float]]:
+    """Round-by-round scores as a compact 2D array: timeline[round][agent_id].
+
+    WHY this shape instead of shipping the log's list-of-dicts as-is: the
+    graph visualization looks up "agent i's score at round r" once per
+    frame of an animation, for every agent, many times over. A flat array
+    indexed by round then agent avoids re-parsing key names on every
+    frame and is far smaller on the wire than repeating "round"/
+    "agent_id"/"opinion_score" keys for every one of num_agents *
+    num_rounds rows. Scores are rounded to 3 decimals here -- plenty of
+    precision for coloring a dot, and it noticeably shrinks the payload
+    at the higher end of the agent/round range.
+    """
+    by_round: dict[int, list[float]] = {}
+    for row in log:
+        by_round.setdefault(row["round"], [0.0] * num_agents)[row["agent_id"]] = round(row["opinion_score"], 3)
+    return [by_round[r] for r in sorted(by_round)]
+
+
 class SimulateRequest(BaseModel):
     """Request body for POST /simulate.
 
@@ -113,11 +132,14 @@ def simulate(request: SimulateRequest, http_request: Request) -> dict:
     CRUD endpoint, this one does real CPU work.
 
     Returns:
-        A dict with the run_id, params, seed info, metrics, the chart as
-        a data: URI (chart_data_url -- works everywhere, including
-        serverless hosts with no shared disk between requests),
-        chart_url (a best-effort GET route -- see get_chart), and
-        elapsed_seconds.
+        A dict with the run_id, params, seed info, metrics, graph (the
+        actual social graph this run's agents lived on -- nodes with
+        their persona traits, edges as [u, v] pairs), opinion_timeline
+        (round-by-round scores as timeline[round][agent_id], for
+        animating the graph), the chart as a data: URI (chart_data_url --
+        works everywhere, including serverless hosts with no shared disk
+        between requests), chart_url (a best-effort GET route -- see
+        get_chart), and elapsed_seconds.
     """
     client_key = http_request.client.host if http_request.client else "unknown"
     allowed, retry_after = _simulate_limiter.allow(client_key)
@@ -134,12 +156,13 @@ def simulate(request: SimulateRequest, http_request: Request) -> dict:
         request.topic, request.num_agents, request.num_rounds, client_key,
     )
 
-    _env, log, seed_info = run_simulation(
+    env, log, seed_info = run_simulation(
         topic=request.topic,
         num_agents=request.num_agents,
         num_rounds=request.num_rounds,
     )
-    metrics = evaluate(topic=request.topic, seed_info=seed_info, log=log)
+    graph = env.graph_data()
+    metrics = evaluate(topic=request.topic, seed_info=seed_info, log=log, graph_nodes=graph["nodes"])
 
     # Build the chart once, in memory -- this is what actually gets
     # delivered to the client (chart_data_url below), so it has to work
@@ -180,6 +203,8 @@ def simulate(request: SimulateRequest, http_request: Request) -> dict:
         "params": {"num_agents": request.num_agents, "num_rounds": request.num_rounds},
         "seed": seed_info,
         "metrics": metrics,
+        "graph": graph,
+        "opinion_timeline": _opinion_timeline(log, request.num_agents),
         "chart_data_url": chart_data_url,
         "chart_url": f"/chart/{run_id}" if chart_path else None,
         "report_path": str(report_path) if report_path else None,
